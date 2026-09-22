@@ -1,0 +1,76 @@
+name: ZivoConnect Flutter Web Preview
+
+on:
+  push:
+    branches:
+      - chatgpt/preview-hosting
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "zivoconnect-preview"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: my_flutter_app
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build Flutter Web
+        run: flutter build web --release --base-href "/school-system/"
+
+      - name: Upload downloadable web build
+        uses: actions/upload-artifact@v4
+        with:
+          name: zivoconnect-web-build
+          path: my_flutter_app/build/web
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Package GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: my_flutter_app/build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy preview
+        id: deployment
+        uses: actions/deploy-pages@v4
