@@ -1,0 +1,36 @@
+.aider*
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Flutter/Dart generated artifacts
+my_flutter_app/.dart_tool/
+my_flutter_app/.flutter-plugins
+my_flutter_app/.flutter-plugins-dependencies
+my_flutter_app/.packages
+my_flutter_app/build/
+my_flutter_app/coverage/
+
+# Native build outputs
+my_flutter_app/android/.gradle/
+my_flutter_app/android/app/debug/
+my_flutter_app/android/app/profile/
+my_flutter_app/android/app/release/
+my_flutter_app/ios/Flutter/Generated.xcconfig
+my_flutter_app/ios/Flutter/flutter_export_environment.sh
+my_flutter_app/macos/Flutter/GeneratedPluginRegistrant.swift
+
+# Local Supabase/runtime artifacts
+supabase/.branches/
+supabase/.temp/
+
+# Local one-off scripts and credential-bearing experiments
+scratch/

@@ -1,0 +1,27 @@
+# Supabase CLI configuration file for Education Management System (EMS) SaaS platform
+
+project_id = "school-system-ems"
+
+[api]
+port = 54321
+schemas = ["public", "graphql"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+port = 54323
+enabled = true
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = []
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_confirmations = false
+enable_signup = true
