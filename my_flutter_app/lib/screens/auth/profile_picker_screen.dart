@@ -119,6 +119,10 @@ class ProfilePickerScreen extends ConsumerWidget {
         return AppRoutes.parentDashboard;
       case AppRoles.student:
         return AppRoutes.studentDashboard;
+      case AppRoles.financeManager:
+        return AppRoutes.schoolAdminFinance;
+      case AppRoles.registrar:
+        return AppRoutes.studentEnrollments;
       default:
         return AppRoutes.profilePicker;
     }
@@ -224,6 +228,10 @@ class _ProfileCard extends StatelessWidget {
         return const Color(0xFF3B82F6);
       case AppRoles.student:
         return const Color(0xFFEC4899);
+      case AppRoles.financeManager:
+        return const Color(0xFF0F766E);
+      case AppRoles.registrar:
+        return const Color(0xFF7C3AED);
       default:
         return AppTheme.textMuted;
     }
