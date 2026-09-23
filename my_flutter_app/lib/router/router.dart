@@ -328,6 +328,10 @@ String _dashboardForRole(String role) {
       return AppRoutes.parentDashboard;
     case AppRoles.student:
       return AppRoutes.studentDashboard;
+    case AppRoles.financeManager:
+      return AppRoutes.schoolAdminFinance;
+    case AppRoles.registrar:
+      return AppRoutes.studentEnrollments;
     default:
       return AppRoutes.profilePicker;
   }
