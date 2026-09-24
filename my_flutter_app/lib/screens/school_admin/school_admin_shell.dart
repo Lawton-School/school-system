@@ -449,19 +449,22 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
 
     try {
       final client = ref.read(supabaseClientProvider);
-      await ProfileService(client).createProfile(
-        schoolId: session.schoolId,
+      final email = _emailCtrl.text.trim();
+      if (email.isEmpty) {
+        throw Exception('Email is required to create a login-enabled user.');
+      }
+      await ProfileService(client).inviteSchoolUser(
         role: _selectedRole,
         firstName: _firstNameCtrl.text.trim(),
         lastName: _lastNameCtrl.text.trim(),
-        email: _emailCtrl.text.trim().isNotEmpty ? _emailCtrl.text.trim() : null,
+        email: email,
         phone: _phoneCtrl.text.trim().isNotEmpty ? _phoneCtrl.text.trim() : null,
       );
       ref.invalidate(_recentProfilesProvider(session.schoolId));
       if (mounted) {
         context.go(AppRoutes.schoolAdminUsers);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('User created successfully!')),
+          const SnackBar(content: Text('User invited successfully. They can activate their account from the email invite.')),
         );
       }
     } catch (e) {
@@ -534,7 +537,7 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
                 controller: _emailCtrl,
                 keyboardType: TextInputType.emailAddress,
                 style: const TextStyle(color: AppTheme.textPrimary),
-                decoration: const InputDecoration(labelText: 'Email (optional)', prefixIcon: Icon(Icons.email_outlined)),
+                decoration: const InputDecoration(labelText: 'Email *', prefixIcon: Icon(Icons.email_outlined)),
               ),
 
               const SizedBox(height: 16),
