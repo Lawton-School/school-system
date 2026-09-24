@@ -23,6 +23,7 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
   List<DirectMessageItem> _messages = [];
   List<Map<String, dynamic>> _teacherContacts = [];
   List<Map<String, dynamic>> _concerns = [];
+  List<Map<String, dynamic>> _meetings = [];
   bool _loadingThread = false;
   bool _sendingMessage = false;
 
@@ -38,7 +39,14 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
   Future<void> _loadTeachers() async {
     final contacts = await ref.read(messagingRepositoryProvider).fetchTeacherParentContacts();
     final concerns = await ref.read(messagingRepositoryProvider).fetchStudentConcerns();
-    if (mounted) setState(() { _teacherContacts = contacts; _concerns = concerns; });
+    final meetings = await ref.read(messagingRepositoryProvider).fetchParentTeacherMeetings();
+    if (mounted) setState(() { _teacherContacts = contacts; _concerns = concerns; _meetings = meetings; });
+  }
+
+  Future<void> _respondMeeting(Map<String,dynamic> meeting,String status) async {
+    final ok=await ref.read(messagingRepositoryProvider).respondParentTeacherMeeting(meetingId:meeting['id'].toString(),status:status);
+    if(ok)await _loadTeachers();
+    if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(ok?'Meeting updated.':'Meeting could not be updated.')));
   }
 
   Future<void> _acknowledge(Map<String,dynamic> concern) async {
