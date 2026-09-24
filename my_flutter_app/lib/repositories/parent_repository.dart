@@ -62,9 +62,6 @@ class ParentRepository {
       final res = await _rpc.getParentDashboard(studentProfileId);
       if (res.isEmpty) return null;
 
-      // The current backend returns Student 360 data plus a nested `dashboard`
-      // object. The frozen Parent dashboard model predates that shape, so keep
-      // the database contract authoritative and normalize it here.
       final dashboard = _map(res['dashboard']);
       final attendance = _map(res['attendance']);
       final academics = _map(res['academics']);
@@ -123,6 +120,18 @@ class ParentRepository {
     );
   }
 
+  Future<Map<String, dynamic>> fetchParentFees(
+    String studentProfileId, {
+    String? academicYearId,
+    String? termId,
+  }) {
+    return _rpc.getParentFees(
+      studentProfileId: studentProfileId,
+      academicYearId: academicYearId,
+      termId: termId,
+    );
+  }
+
   Future<List<InvoiceModel>> fetchStudentInvoices(
     String studentProfileId,
   ) async {
@@ -145,8 +154,6 @@ class ParentRepository {
     }
   }
 
-  /// Payments do not carry a student_profile_id. Student ownership is derived
-  /// through the linked invoice, matching the production schema.
   Future<List<PaymentModel>> fetchStudentPayments(
     String studentProfileId,
   ) async {
