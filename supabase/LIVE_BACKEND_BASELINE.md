@@ -120,6 +120,8 @@ For future implementation work, use this priority when sources disagree:
 
 ## Validation status
 
-The definitions were captured from live PostgreSQL metadata (`pg_get_functiondef`, constraints, policies, publication membership, Storage metadata) and deployed Edge Function source. They have not yet been replayed end-to-end into a fresh Supabase development database in this branch.
+The definitions were captured from live PostgreSQL metadata (`pg_get_functiondef`, constraints, policies, publication membership, Storage metadata) and deployed Edge Function source.
 
-Do **not** mark the reconciliation migrations merge-ready solely because production already contains the target state. Before merging, replay them on a disposable/local Supabase environment or a Supabase development branch and resolve any migration-order or syntax issue without using production as the test environment.
+The complete migration chain was replayed successfully from scratch on 2026-09-24 in an isolated Docker-backed local Supabase instance through GitHub Actions using `supabase db reset --local`. No production credentials or production database writes were used for this validation.
+
+Phase 1 therefore has both source-capture evidence and a successful clean migration replay. Functional role-by-role behavior remains part of the later acceptance-testing phase rather than this source-reconciliation phase.
