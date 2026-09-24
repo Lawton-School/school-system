@@ -26,7 +26,49 @@ class TeacherRepository {
   Future<TeacherDashboardMetrics> fetchDashboardMetrics() async {
     try {
       final res = await _rpc.getTeacherDashboardMetrics();
-      if (res.isNotEmpty) return TeacherDashboardMetrics.fromMap(res);
+      if (res.isEmpty) return const TeacherDashboardMetrics();
+
+      // The frozen Teacher dashboard model predates the production RPC field
+      // names. Normalize only verified schedule keys here instead of teaching
+      // widgets about database-specific JSON shapes.
+      final normalized = Map<String, dynamic>.from(res);
+      final rawSchedule = res['schedule'];
+      if (rawSchedule is List) {
+        normalized['schedule'] = rawSchedule.whereType<Map>().map((raw) {
+          final item = Map<String, dynamic>.from(raw);
+          final start = item['start_time']?.toString() ?? '';
+          final className = item['class_name']?.toString().trim() ?? '';
+          final sectionName = item['section_name']?.toString().trim() ?? '';
+          final rawStatus = item['status']?.toString() ?? 'upcoming';
+
+          final classSectionName = [className, sectionName]
+              .where((part) => part.isNotEmpty)
+              .join(' · ');
+          final statusVariant = switch (rawStatus) {
+            'completed' => 'success',
+            'next' || 'in_progress' => 'primary',
+            _ => 'neutral',
+          };
+          final displayStatus = switch (rawStatus) {
+            'in_progress' => 'In progress',
+            'completed' => 'Completed',
+            'next' => 'Next',
+            'upcoming' => 'Upcoming',
+            _ => rawStatus,
+          };
+
+          return <String, dynamic>{
+            ...item,
+            'time': start.length >= 5 ? start.substring(0, 5) : start,
+            'class_section_name': classSectionName,
+            'students': item['student_count'],
+            'status': displayStatus,
+            'status_variant': statusVariant,
+          };
+        }).toList(growable: false);
+      }
+
+      return TeacherDashboardMetrics.fromMap(normalized);
     } catch (e) {
       debugPrint('[TeacherRepository] fetchDashboardMetrics error: $e');
     }
