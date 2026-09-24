@@ -19,6 +19,7 @@ import '../screens/school_admin/school_reports_screen.dart';
 import '../screens/school_admin/notifications_screen.dart';
 import '../screens/school_admin/report_cards_screen.dart';
 import '../screens/school_admin/admissions_screen.dart';
+import '../screens/reception/reception_dashboard_screen.dart';
 import '../screens/school_admin/direct_messaging_screen.dart';
 import '../screens/school_admin/library_screen.dart';
 import '../screens/school_admin/behavior_screen.dart';
@@ -97,6 +98,9 @@ class AppRoutes {
 
   // Phase 7: Sync Diagnostics
   static const syncDiagnostics = '/sync-diagnostics';
+
+  // Reception
+  static const receptionDashboard = '/reception';
 
   // Teacher
   static const teacherDashboard = '/teacher';
@@ -304,6 +308,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
+      GoRoute(
+        path: AppRoutes.receptionDashboard,
+        builder: (context, state) => const ReceptionDashboardScreen(),
+      ),
+
       ShellRoute(
         builder: (context, state, child) => TeacherShell(child: child),
         routes: [
@@ -378,7 +387,7 @@ String _dashboardForRole(String role) {
     case AppRoles.registrar:
       return AppRoutes.schoolAdminAdmissions;
     case AppRoles.reception:
-      return AppRoutes.schoolAdminAdmissions;
+      return AppRoutes.receptionDashboard;
     default:
       return AppRoutes.profilePicker;
   }
