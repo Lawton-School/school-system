@@ -119,6 +119,28 @@ class ProfileService {
     return ProfileModel.fromMap(response);
   }
 
+  /// Invite a school user through the server-side Auth Admin workflow.
+  Future<void> inviteSchoolUser({
+    required String role,
+    required String firstName,
+    required String lastName,
+    required String email,
+    String? phone,
+  }) async {
+    final response = await _client.functions.invoke('invite-school-user', body: {
+      'role': role,
+      'first_name': firstName,
+      'last_name': lastName,
+      'email': email,
+      'phone': phone,
+    });
+    if (response.status < 200 || response.status >= 300) {
+      final data = response.data;
+      final message = data is Map ? data['error']?.toString() : null;
+      throw Exception(message ?? 'Unable to invite user');
+    }
+  }
+
   /// Update a profile.
   Future<ProfileModel> updateProfile({
     required String profileId,
