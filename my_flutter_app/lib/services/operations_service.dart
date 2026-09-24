@@ -61,7 +61,7 @@ class SchoolOperationsService extends legacy.SchoolOperationsService {
       'date': date.toIso8601String().split('T')[0],
       'status': status,
       'remarks': remarks,
-    }, onConflict: 'school_id,class_section_id,student_profile_id,date').select(
+    }, onConflict: 'student_profile_id,date').select(
       '*, profiles!daily_attendance_student_profile_id_fkey(*), class_sections(*, classes(*))',
     ).single();
 
