@@ -216,7 +216,19 @@ class RpcClient {
   }
 
   Future<Map<String, dynamic>> getFinanceDashboardMetrics() async {
-    return _asMap(await _client.rpc('get_finance_dashboard_metrics'));
+    final payload =
+        _asMap(await _client.rpc('get_finance_dashboard_metrics'));
+
+    // Compatibility aliases for the frozen Finance dashboard UI. These map
+    // directly to authoritative backend fields; they do not change currency
+    // semantics. Multi-currency scalar aggregation remains a backend/UI debt
+    // and must not be presented as currency-safe reporting.
+    return <String, dynamic>{
+      ...payload,
+      'total_collected': payload['total_paid'],
+      'total_outstanding': payload['outstanding'],
+      'total_expenses': payload['expenses_this_month'],
+    };
   }
 
   Future<Map<String, dynamic>> reconcilePaymentToInvoice({
@@ -319,7 +331,23 @@ class RpcClient {
   }
 
   Future<Map<String, dynamic>> getSuperAdminPlatformMetrics() async {
-    return _asMap(await _client.rpc('get_super_admin_platform_metrics'));
+    final payload =
+        _asMap(await _client.rpc('get_super_admin_platform_metrics'));
+
+    // Compatibility aliases for the frozen Super Admin dashboard. Keep the
+    // backend names as source of truth while preventing old UI keys from
+    // rendering valid platform metrics as zero.
+    return <String, dynamic>{
+      ...payload,
+      'total_schools': payload['schools_total'],
+      'active_schools': payload['schools_active'],
+      'trial_schools': payload['schools_trial'],
+      'platform_users': payload['users_total'],
+      'total_users': payload['users_total'],
+      'needs_attention':
+          ((payload['schools_past_due'] as num?)?.toInt() ?? 0) +
+              ((payload['schools_suspended'] as num?)?.toInt() ?? 0),
+    };
   }
 
   Future<List<Map<String, dynamic>>> getSuperAdminSchoolsDirectory() async {
