@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../controllers/admissions_controllers.dart';
 import '../../core/theme.dart';
 import '../../widgets/stitch_widgets.dart';
+import '../../providers/providers.dart';
 
 /// Screen 15 — Admissions.
 ///
@@ -60,6 +61,11 @@ class _AdmissionsScreenState extends ConsumerState<AdmissionsScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'New application',
+            onPressed: _showNewApplicationDialog,
+            icon: const Icon(Icons.person_add_alt_1_rounded),
+          ),
           IconButton(
             tooltip: 'Refresh applications',
             onPressed: () => ref.invalidate(admissionsPipelineProvider),
@@ -286,9 +292,9 @@ class _AdmissionsScreenState extends ConsumerState<AdmissionsScreen> {
                 ),
                 if (acceptedAndUnlinked)
                   FilledButton.icon(
-                    onPressed: () => _showEnrollmentLinkDialog(application),
+                    onPressed: () => _showEnrollAcceptedDialog(application),
                     icon: const Icon(Icons.link_rounded, size: 16),
-                    label: const Text('Link Enrolled Student'),
+                    label: const Text('Enroll Student'),
                   ),
                 TextButton.icon(
                   onPressed: () => _showApplicationDetails(application),
@@ -415,131 +421,239 @@ class _AdmissionsScreenState extends ConsumerState<AdmissionsScreen> {
     notesController.dispose();
   }
 
-  Future<void> _showEnrollmentLinkDialog(
-    Map<String, dynamic> application,
-  ) async {
-    final cached = ref.read(admissionStudentCandidatesProvider).asData?.value;
-    final List<Map<String, dynamic>> students =
-        cached ?? await ref.read(admissionStudentCandidatesProvider.future);
-    if (!mounted) return;
-
-    if (students.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No active student profiles are available. Create/enroll the student profile first, then link it here.',
-          ),
-        ),
-      );
-      return;
-    }
-
-    var selectedStudentId = students.first['id']?.toString() ?? '';
-    var saving = false;
+  Future<void> _showNewApplicationDialog() async {
+    final formKey = GlobalKey<FormState>();
+    final first = TextEditingController();
+    final middle = TextEditingController();
+    final last = TextEditingController();
+    final studentEmail = TextEditingController();
+    final studentPhone = TextEditingController();
+    final guardian = TextEditingController();
+    final guardianEmail = TextEditingController();
+    final guardianPhone = TextEditingController();
+    final previousSchool = TextEditingController();
+    final nationality = TextEditingController(text: 'Zimbabwean');
+    final emergencyName = TextEditingController();
+    final emergencyPhone = TextEditingController();
+    final medicalNotes = TextEditingController();
+    DateTime? dob;
+    String relationship = 'guardian';
+    String curriculum = 'ZIMSEC';
+    String attendanceType = 'day';
+    bool saving = false;
 
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Link Enrolled Student'),
+          title: const Text('New Student Application'),
           content: SizedBox(
-            width: 520,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  application['applicant_name']?.toString() ?? 'Accepted applicant',
-                  style: const TextStyle(
-                    color: AppTheme.stitchHeading,
-                    fontWeight: FontWeight.w700,
-                  ),
+            width: 650,
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    const Align(alignment: Alignment.centerLeft, child: Text('Student details', style: TextStyle(fontWeight: FontWeight.w800))),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: TextFormField(controller: first, decoration: const InputDecoration(labelText: 'First name *'), validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null)),
+                      const SizedBox(width: 10),
+                      Expanded(child: TextFormField(controller: middle, decoration: const InputDecoration(labelText: 'Middle name'))),
+                      const SizedBox(width: 10),
+                      Expanded(child: TextFormField(controller: last, decoration: const InputDecoration(labelText: 'Last name *'), validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null)),
+                    ]),
+                    const SizedBox(height: 10),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(dob == null ? 'Date of birth *' : 'Date of birth: ${dob!.day}/${dob!.month}/${dob!.year}'),
+                      trailing: const Icon(Icons.calendar_month_rounded),
+                      onTap: () async {
+                        final value = await showDatePicker(context: context, initialDate: DateTime(DateTime.now().year - 10), firstDate: DateTime(1990), lastDate: DateTime.now());
+                        if (value != null) setDialogState(() => dob = value);
+                      },
+                    ),
+                    Row(children: [
+                      Expanded(child: TextFormField(controller: studentEmail, decoration: const InputDecoration(labelText: 'Student email (optional)'))),
+                      const SizedBox(width: 10),
+                      Expanded(child: TextFormField(controller: studentPhone, decoration: const InputDecoration(labelText: 'Student phone (optional)'))),
+                    ]),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: DropdownButtonFormField<String>(initialValue: curriculum, decoration: const InputDecoration(labelText: 'Curriculum'), items: const [DropdownMenuItem(value: 'ZIMSEC', child: Text('ZIMSEC')), DropdownMenuItem(value: 'Cambridge', child: Text('Cambridge')), DropdownMenuItem(value: 'Other', child: Text('Other'))], onChanged: (v) => setDialogState(() => curriculum = v ?? curriculum))),
+                      const SizedBox(width: 10),
+                      Expanded(child: DropdownButtonFormField<String>(initialValue: attendanceType, decoration: const InputDecoration(labelText: 'Attendance'), items: const [DropdownMenuItem(value: 'day', child: Text('Day')), DropdownMenuItem(value: 'boarding', child: Text('Boarding'))], onChanged: (v) => setDialogState(() => attendanceType = v ?? attendanceType))),
+                    ]),
+                    const SizedBox(height: 10),
+                    TextFormField(controller: previousSchool, decoration: const InputDecoration(labelText: 'Previous school')),
+                    const SizedBox(height: 10),
+                    TextFormField(controller: nationality, decoration: const InputDecoration(labelText: 'Nationality')),
+                    const SizedBox(height: 18),
+                    const Align(alignment: Alignment.centerLeft, child: Text('Parent / Guardian', style: TextStyle(fontWeight: FontWeight.w800))),
+                    const SizedBox(height: 10),
+                    TextFormField(controller: guardian, decoration: const InputDecoration(labelText: 'Guardian full name *'), validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: TextFormField(controller: guardianEmail, decoration: const InputDecoration(labelText: 'Guardian email'))),
+                      const SizedBox(width: 10),
+                      Expanded(child: TextFormField(controller: guardianPhone, decoration: const InputDecoration(labelText: 'Guardian phone'))),
+                    ]),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(initialValue: relationship, decoration: const InputDecoration(labelText: 'Relationship'), items: const [DropdownMenuItem(value: 'mother', child: Text('Mother')), DropdownMenuItem(value: 'father', child: Text('Father')), DropdownMenuItem(value: 'guardian', child: Text('Guardian')), DropdownMenuItem(value: 'other', child: Text('Other'))], onChanged: (v) => setDialogState(() => relationship = v ?? relationship)),
+                    const SizedBox(height: 18),
+                    const Align(alignment: Alignment.centerLeft, child: Text('Emergency & important notes', style: TextStyle(fontWeight: FontWeight.w800))),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: TextFormField(controller: emergencyName, decoration: const InputDecoration(labelText: 'Emergency contact'))),
+                      const SizedBox(width: 10),
+                      Expanded(child: TextFormField(controller: emergencyPhone, decoration: const InputDecoration(labelText: 'Emergency phone'))),
+                    ]),
+                    const SizedBox(height: 10),
+                    TextFormField(controller: medicalNotes, maxLines: 2, decoration: const InputDecoration(labelText: 'Important medical notes (optional)')),
+                  ],
                 ),
-                const SizedBox(height: 14),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedStudentId,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Student Profile'),
-                  items: students.map((student) {
-                    final id = student['id']?.toString() ?? '';
-                    final name = student['full_name']?.toString().isNotEmpty == true
-                        ? student['full_name'].toString()
-                        : 'Unnamed Student';
-                    final email = student['email']?.toString();
-                    return DropdownMenuItem(
-                      value: id,
-                      child: Text(
-                        email?.isNotEmpty == true ? '$name · $email' : name,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: saving
-                      ? null
-                      : (value) {
-                          if (value != null) {
-                            setDialogState(() => selectedStudentId = value);
-                          }
-                        },
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'The server will verify that the application is accepted and that the student belongs to the same school.',
-                  style: TextStyle(
-                    color: AppTheme.stitchMuted,
-                    fontSize: 11.5,
-                    height: 1.4,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: saving ? null : () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            FilledButton.icon(
-              onPressed: saving
-                  ? null
-                  : () async {
-                      final applicationId = application['id']?.toString() ?? '';
-                      if (applicationId.isEmpty || selectedStudentId.isEmpty) return;
-                      setDialogState(() => saving = true);
-                      try {
-                        await ref.read(admissionsRepositoryProvider).linkEnrolledStudent(
-                              applicationId: applicationId,
-                              studentProfileId: selectedStudentId,
-                            );
-                        ref.invalidate(admissionsPipelineProvider);
-                        if (dialogContext.mounted) Navigator.pop(dialogContext);
-                        if (mounted) {
-                          ScaffoldMessenger.of(this.context).showSnackBar(
-                            const SnackBar(content: Text('Enrollment link saved.')),
-                          );
-                        }
-                      } catch (error) {
-                        if (dialogContext.mounted) {
-                          ScaffoldMessenger.of(dialogContext).showSnackBar(
-                            SnackBar(content: Text('Link failed: $error')),
-                          );
-                          setDialogState(() => saving = false);
-                        }
-                      }
-                    },
-              icon: saving
-                  ? const SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.link_rounded, size: 16),
-              label: const Text('Link Student'),
+            TextButton(onPressed: saving ? null : () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: saving ? null : () async {
+                if (!(formKey.currentState?.validate() ?? false) || dob == null) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(const SnackBar(content: Text('Complete the required student and guardian fields.')));
+                  return;
+                }
+                setDialogState(() => saving = true);
+                try {
+                  final result = await ref.read(admissionsRepositoryProvider).createApplication(
+                    firstName: first.text, middleName: middle.text, lastName: last.text, dateOfBirth: dob!,
+                    email: studentEmail.text, phone: studentPhone.text, parentName: guardian.text,
+                    parentEmail: guardianEmail.text, parentPhone: guardianPhone.text, previousSchool: previousSchool.text,
+                    nationality: nationality.text, curriculum: curriculum, attendanceType: attendanceType,
+                    guardianRelationship: relationship, emergencyContactName: emergencyName.text,
+                    emergencyContactPhone: emergencyPhone.text, medicalNotes: medicalNotes.text,
+                  );
+                  ref.invalidate(admissionsPipelineProvider);
+                  if (dialogContext.mounted) Navigator.pop(dialogContext);
+                  if (mounted) ScaffoldMessenger.of(this.context).showSnackBar(SnackBar(content: Text('Application ${result['application_number'] ?? ''} created successfully.')));
+                } catch (e) {
+                  if (dialogContext.mounted) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text('Application failed: $e')));
+                    setDialogState(() => saving = false);
+                  }
+                }
+              },
+              child: Text(saving ? 'Submitting...' : 'Submit Application'),
             ),
           ],
         ),
       ),
     );
+
+    for (final controller in [first,middle,last,studentEmail,studentPhone,guardian,guardianEmail,guardianPhone,previousSchool,nationality,emergencyName,emergencyPhone,medicalNotes]) {
+      controller.dispose();
+    }
+  }
+
+  Future<void> _showEnrollAcceptedDialog(Map<String, dynamic> application) async {
+    final session = ref.read(activeSessionProvider);
+    if (session == null) return;
+    final sections = await ref.read(classSectionsProvider(session.schoolId).future);
+    final years = await ref.read(academicYearsProvider(session.schoolId).future);
+    if (!mounted) return;
+    if (sections.isEmpty || years.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Create an academic year and class section before enrollment.')));
+      return;
+    }
+
+    String yearId = years.firstWhere((y) => y.isCurrent, orElse: () => years.first).id;
+    var matchingSections = sections.where((s) => s.classModel?.academicYearId == yearId).toList();
+    if (matchingSections.isEmpty) matchingSections = sections;
+    String sectionId = matchingSections.first.id;
+    final roll = TextEditingController();
+    final admissionNo = TextEditingController(text: application['application_number']?.toString() ?? '');
+    bool saving = false;
+
+    Map<String, dynamic>? success;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(success == null ? 'Enroll Accepted Student' : 'Enrollment Successful'),
+          content: SizedBox(
+            width: 560,
+            child: success != null
+                ? Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Icon(Icons.check_circle_rounded, color: AppTheme.success, size: 54),
+                    const SizedBox(height: 12),
+                    Text('${application['applicant_name'] ?? 'Student'} is now an active student.', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                    const SizedBox(height: 10),
+                    Text('Admission number: ${success!['admission_number'] ?? '—'}'),
+                    Text('Student profile: ${success!['student_profile_id'] ?? '—'}'),
+                    const SizedBox(height: 8),
+                    const Text('The guardian profile and parent-student relationship were created or linked automatically.'),
+                  ])
+                : Column(mainAxisSize: MainAxisSize.min, children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: yearId,
+                      decoration: const InputDecoration(labelText: 'Academic Year'),
+                      items: years.map((y) => DropdownMenuItem(value: y.id, child: Text(y.name))).toList(),
+                      onChanged: saving ? null : (v) {
+                        if (v == null) return;
+                        setDialogState(() {
+                          yearId = v;
+                          final filtered = sections.where((s) => s.classModel?.academicYearId == yearId).toList();
+                          matchingSections = filtered.isEmpty ? sections : filtered;
+                          sectionId = matchingSections.first.id;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      key: ValueKey(sectionId),
+                      initialValue: sectionId,
+                      decoration: const InputDecoration(labelText: 'Class / Section'),
+                      items: matchingSections.map((s) => DropdownMenuItem(value: s.id, child: Text(s.displayName))).toList(),
+                      onChanged: saving ? null : (v) => setDialogState(() => sectionId = v ?? sectionId),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(controller: admissionNo, decoration: const InputDecoration(labelText: 'Admission Number')),
+                    const SizedBox(height: 12),
+                    TextFormField(controller: roll, decoration: const InputDecoration(labelText: 'Roll Number (optional)')),
+                    const SizedBox(height: 12),
+                    const Text('Enrollment creates the student profile, student details, class enrollment, parent profile (or reuses a matching parent), and parent-student relationship in one server transaction.', style: TextStyle(color: AppTheme.stitchMuted, fontSize: 11.5)),
+                  ]),
+          ),
+          actions: success != null
+              ? [FilledButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Done'))]
+              : [
+                  TextButton(onPressed: saving ? null : () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+                  FilledButton.icon(
+                    onPressed: saving ? null : () async {
+                      setDialogState(() => saving = true);
+                      try {
+                        final result = await ref.read(admissionsRepositoryProvider).enrollAcceptedApplication(
+                          applicationId: application['id'].toString(), classSectionId: sectionId,
+                          academicYearId: yearId, rollNumber: roll.text, admissionNumber: admissionNo.text,
+                        );
+                        ref.invalidate(admissionsPipelineProvider);
+                        setDialogState(() { success = result; saving = false; });
+                      } catch (e) {
+                        if (dialogContext.mounted) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text('Enrollment failed: $e')));
+                          setDialogState(() => saving = false);
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.how_to_reg_rounded),
+                    label: Text(saving ? 'Enrolling...' : 'Enroll Student'),
+                  ),
+                ],
+        ),
+      ),
+    );
+    roll.dispose();
+    admissionNo.dispose();
   }
 
   Future<void> _showApplicationDetails(Map<String, dynamic> application) async {
