@@ -240,10 +240,7 @@ class _PaymentsLedgerScreenState extends ConsumerState<PaymentsLedgerScreen> {
                       const SizedBox(height: 3),
                       Text(
                         reference.isEmpty ? 'No transaction reference' : reference,
-                        style: const TextStyle(
-                          color: AppTheme.stitchMuted,
-                          fontSize: 11.5,
-                        ),
+                        style: const TextStyle(color: AppTheme.stitchMuted, fontSize: 11.5),
                       ),
                     ],
                   ),
@@ -265,19 +262,11 @@ class _PaymentsLedgerScreenState extends ConsumerState<PaymentsLedgerScreen> {
               spacing: 20,
               runSpacing: 10,
               children: [
-                _LedgerMetric(
-                  label: 'Method',
-                  value: payment['payment_method']?.toString() ?? '—',
-                ),
-                _LedgerMetric(
-                  label: 'Provider',
-                  value: payment['provider']?.toString() ?? '—',
-                ),
+                _LedgerMetric(label: 'Method', value: payment['payment_method']?.toString() ?? '—'),
+                _LedgerMetric(label: 'Provider', value: payment['provider']?.toString() ?? '—'),
                 _LedgerMetric(
                   label: 'Paid',
-                  value: paidAt == null
-                      ? '—'
-                      : '${paidAt.day}/${paidAt.month}/${paidAt.year}',
+                  value: paidAt == null ? '—' : '${paidAt.day}/${paidAt.month}/${paidAt.year}',
                 ),
                 _LedgerMetric(
                   label: 'Invoice',
@@ -287,15 +276,11 @@ class _PaymentsLedgerScreenState extends ConsumerState<PaymentsLedgerScreen> {
                 ),
               ],
             ),
-            if (!unmatched &&
-                (payment['student_name']?.toString() ?? '').isNotEmpty) ...[
+            if (!unmatched && (payment['student_name']?.toString() ?? '').isNotEmpty) ...[
               const SizedBox(height: 9),
               Text(
                 payment['student_name'].toString(),
-                style: const TextStyle(
-                  color: AppTheme.stitchMuted,
-                  fontSize: 11.5,
-                ),
+                style: const TextStyle(color: AppTheme.stitchMuted, fontSize: 11.5),
               ),
             ],
             if (canReconcile) ...[
@@ -316,8 +301,9 @@ class _PaymentsLedgerScreenState extends ConsumerState<PaymentsLedgerScreen> {
   }
 
   Future<void> _showReconcileDialog(Map<String, dynamic> payment) async {
-    var invoices = ref.read(invoiceManagementProvider).asData?.value;
-    invoices ??= await ref.read(invoiceManagementProvider.future);
+    final cached = ref.read(invoiceManagementProvider).asData?.value;
+    final List<Map<String, dynamic>> invoices =
+        cached ?? await ref.read(invoiceManagementProvider.future);
     if (!mounted) return;
 
     final paymentCurrency = payment['currency']?.toString() ?? '';
@@ -332,9 +318,7 @@ class _PaymentsLedgerScreenState extends ConsumerState<PaymentsLedgerScreen> {
     if (candidates.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'No outstanding $paymentCurrency invoice is available for this payment.',
-          ),
+          content: Text('No outstanding $paymentCurrency invoice is available for this payment.'),
         ),
       );
       return;
@@ -357,10 +341,7 @@ class _PaymentsLedgerScreenState extends ConsumerState<PaymentsLedgerScreen> {
                 children: [
                   Text(
                     '${paymentCurrency.isEmpty ? 'UNSPECIFIED' : paymentCurrency} ${_number(payment['amount']).toStringAsFixed(2)} · ${_reference(payment)}',
-                    style: const TextStyle(
-                      color: AppTheme.stitchMuted,
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(color: AppTheme.stitchMuted, fontSize: 12),
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
@@ -383,19 +364,13 @@ class _PaymentsLedgerScreenState extends ConsumerState<PaymentsLedgerScreen> {
                     onChanged: submitting
                         ? null
                         : (value) {
-                            if (value != null) {
-                              setDialogState(() => selectedId = value);
-                            }
+                            if (value != null) setDialogState(() => selectedId = value);
                           },
                   ),
                   const SizedBox(height: 14),
                   const Text(
                     'The server will re-check school ownership and currency before linking the payment and recalculating the invoice.',
-                    style: TextStyle(
-                      color: AppTheme.stitchMuted,
-                      fontSize: 11.5,
-                      height: 1.4,
-                    ),
+                    style: TextStyle(color: AppTheme.stitchMuted, fontSize: 11.5, height: 1.4),
                   ),
                 ],
               ),
@@ -453,10 +428,8 @@ class _PaymentsLedgerScreenState extends ConsumerState<PaymentsLedgerScreen> {
 
   static double _number(dynamic value) => value is num ? value.toDouble() : 0.0;
 
-  static DateTime? _date(dynamic value) {
-    if (value == null) return null;
-    return DateTime.tryParse(value.toString());
-  }
+  static DateTime? _date(dynamic value) =>
+      value == null ? null : DateTime.tryParse(value.toString());
 
   static String _reference(Map<String, dynamic> payment) {
     return payment['provider_reference']?.toString().trim().isNotEmpty == true
@@ -498,10 +471,7 @@ class _PaymentCurrencySummary extends StatelessWidget {
 
     if (byCurrency.isEmpty) {
       return const StitchCard(
-        child: Text(
-          'No payment transactions recorded yet.',
-          style: TextStyle(color: AppTheme.stitchMuted),
-        ),
+        child: Text('No payment transactions recorded yet.', style: TextStyle(color: AppTheme.stitchMuted)),
       );
     }
 
@@ -516,20 +486,11 @@ class _PaymentCurrencySummary extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  entry.key,
-                  style: const TextStyle(
-                    color: AppTheme.primaryDark,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+                Text(entry.key, style: const TextStyle(color: AppTheme.primaryDark, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 9),
                 Text(
                   '${entry.key} ${totals['confirmed']!.toStringAsFixed(2)} confirmed',
-                  style: const TextStyle(
-                    color: AppTheme.stitchHeading,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: const TextStyle(color: AppTheme.stitchHeading, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -560,20 +521,12 @@ class _LedgerMetric extends StatelessWidget {
       children: [
         Text(
           label.toUpperCase(),
-          style: const TextStyle(
-            color: AppTheme.stitchMuted,
-            fontSize: 9.5,
-            fontWeight: FontWeight.w700,
-          ),
+          style: const TextStyle(color: AppTheme.stitchMuted, fontSize: 9.5, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 2),
         Text(
           value,
-          style: const TextStyle(
-            color: AppTheme.stitchHeading,
-            fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-          ),
+          style: const TextStyle(color: AppTheme.stitchHeading, fontSize: 12.5, fontWeight: FontWeight.w700),
         ),
       ],
     );
