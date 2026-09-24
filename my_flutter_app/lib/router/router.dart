@@ -36,6 +36,7 @@ import '../screens/finance/parent_fees_screen.dart';
 import '../screens/teacher/teacher_shell.dart';
 import '../screens/teacher/teacher_operations_screen.dart';
 import '../screens/teacher/teacher_ai_assistant_screen.dart';
+import '../screens/teacher/teacher_parent_engagement_screen.dart';
 import '../screens/parent/parent_shell.dart';
 import '../screens/parent/parent_academics_screen.dart';
 import '../screens/parent/parent_messages_screen.dart';
@@ -106,6 +107,7 @@ class AppRoutes {
   static const teacherDashboard = '/teacher';
   static const teacherOperations = '/teacher/operations';
   static const teacherAiAssistant = '/teacher/ai-assistant';
+  static const teacherParentEngagement = '/teacher/parent-engagement';
 
   // Parent
   static const parentDashboard = '/parent';
@@ -327,6 +329,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.teacherAiAssistant,
             builder: (context, state) => const TeacherAiAssistantScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.teacherParentEngagement,
+            builder: (context, state) => const TeacherParentEngagementScreen(),
           ),
         ],
       ),
