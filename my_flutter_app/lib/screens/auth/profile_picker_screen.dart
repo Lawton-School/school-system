@@ -141,6 +141,8 @@ class ProfilePickerScreen extends ConsumerWidget {
         return AppRoutes.schoolAdminFinance;
       case AppRoles.registrar:
         return AppRoutes.studentEnrollments;
+      case AppRoles.reception:
+        return AppRoutes.schoolAdminAdmissions;
       default:
         return AppRoutes.profilePicker;
     }
@@ -244,6 +246,8 @@ class _ProfileCard extends StatelessWidget {
         return const Color(0xFF0F766E);
       case AppRoles.registrar:
         return const Color(0xFF7C3AED);
+      case AppRoles.reception:
+        return const Color(0xFF0891B2);
       default:
         return AppTheme.textMuted;
     }
