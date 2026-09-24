@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../providers/providers.dart';
+import '../../controllers/parent_controllers.dart';
 
 final teacherParentContactsProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async => ref.watch(messagingRepositoryProvider).fetchTeacherParentContacts());
 
