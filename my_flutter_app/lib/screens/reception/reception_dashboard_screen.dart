@@ -31,7 +31,7 @@ class _ReceptionDashboardScreenState extends ConsumerState<ReceptionDashboardScr
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final session = ref.watch(activeSessionProvider);
     final pipeline = ref.watch(admissionsPipelineProvider);
     final frontDesk = ref.watch(frontDeskWorkspaceProvider);
