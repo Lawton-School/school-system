@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../router/router.dart';
 import '../../services/services.dart';
-import '../../widgets/stitch_widgets.dart';
 import 'finance_currency_kpi_header.dart';
 
 class SchoolFinanceScreen extends ConsumerStatefulWidget {
@@ -352,6 +353,18 @@ class _SchoolFinanceScreenState extends ConsumerState<SchoolFinanceScreen> {
               Text('Dashboard', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: AppTheme.stitchHeading)),
             ],
           ),
+          actions: [
+            IconButton(
+              tooltip: 'Invoices',
+              onPressed: () => context.go(AppRoutes.schoolAdminInvoices),
+              icon: const Icon(Icons.receipt_long_rounded),
+            ),
+            IconButton(
+              tooltip: 'Payments ledger',
+              onPressed: () => context.go(AppRoutes.schoolAdminPayments),
+              icon: const Icon(Icons.payments_rounded),
+            ),
+          ],
           bottom: const TabBar(
             isScrollable: true,
             labelColor: AppTheme.primary,
@@ -400,7 +413,6 @@ class _SchoolFinanceScreenState extends ConsumerState<SchoolFinanceScreen> {
     );
   }
 }
-
 
 // ─────────────────────────────────────────────────────────────────
 // TAB 1: INVOICES & FEES
