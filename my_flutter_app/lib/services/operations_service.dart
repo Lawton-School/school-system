@@ -4,13 +4,46 @@ import 'legacy_services.dart' as legacy;
 
 /// Hardened compatibility facade for school operations.
 ///
-/// Existing read/leave/clocking behavior is inherited while attendance upserts
-/// and announcement publishing are aligned to the verified production schema
-/// and server-authoritative announcement RPCs.
+/// Existing leave/clocking behavior is inherited while attendance reads and
+/// writes are aligned to the verified production schema and announcement
+/// publishing is delegated to server-authoritative RPCs.
 class SchoolOperationsService extends legacy.SchoolOperationsService {
   final SupabaseClient _client;
 
   SchoolOperationsService(this._client) : super(_client);
+
+  @override
+  Future<List<AttendanceEntryModel>> getAttendanceEntries(
+    String schoolId, {
+    DateTime? date,
+    String? classSectionId,
+    String? studentProfileId,
+  }) async {
+    var query = _client
+        .from('daily_attendance')
+        .select(
+          '*, profiles!daily_attendance_student_profile_id_fkey(*), class_sections(*, classes(*))',
+        )
+        .eq('school_id', schoolId)
+        .isFilter('deleted_at', null);
+
+    if (date != null) {
+      query = query.eq('date', date.toIso8601String().split('T')[0]);
+    }
+    if (classSectionId != null) {
+      query = query.eq('class_section_id', classSectionId);
+    }
+    if (studentProfileId != null) {
+      query = query.eq('student_profile_id', studentProfileId);
+    }
+
+    final response = await query.order('date', ascending: false);
+    return (response as List)
+        .map((m) => AttendanceEntryModel.fromMap(
+              Map<String, dynamic>.from(m as Map),
+            ))
+        .toList();
+  }
 
   @override
   Future<AttendanceEntryModel> markAttendance({
