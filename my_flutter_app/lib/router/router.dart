@@ -20,6 +20,11 @@ import '../screens/school_admin/notifications_screen.dart';
 import '../screens/school_admin/report_cards_screen.dart';
 import '../screens/school_admin/admissions_screen.dart';
 import '../screens/school_admin/direct_messaging_screen.dart';
+import '../screens/school_admin/library_screen.dart';
+import '../screens/school_admin/behavior_screen.dart';
+import '../screens/school_admin/school_settings_screen.dart';
+import '../screens/school_admin/students_directory_screen.dart';
+import '../screens/school_admin/announcements_screen.dart';
 import '../screens/operations/bus_tracking_screen.dart';
 import '../screens/operations/marketplace_screen.dart';
 import '../screens/operations/sync_diagnostics_screen.dart';
@@ -69,11 +74,16 @@ class AppRoutes {
   static const schoolAdminAdmissions = '/school-admin/admissions';
   static const schoolAdminMessages = '/school-admin/messages';
 
-  // Phase 4: Gradebook & LMS
+  // Phase 4: Gradebook, Reports & Administration
   static const schoolAdminGradebook = '/school-admin/gradebook-setup';
   static const schoolAdminReportCards = '/school-admin/report-cards';
   static const schoolAdminReports = '/school-admin/reports';
   static const schoolAdminNotifications = '/school-admin/notifications';
+  static const schoolAdminLibrary = '/school-admin/library';
+  static const schoolAdminBehavior = '/school-admin/behavior';
+  static const schoolAdminSettings = '/school-admin/settings';
+  static const schoolAdminStudents = '/school-admin/students';
+  static const schoolAdminAnnouncements = '/school-admin/announcements';
 
   // Phase 5: Operations & Auxiliary Modules
   static const schoolAdminBus = '/school-admin/bus-fleet';
@@ -266,6 +276,26 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.schoolAdminNotifications,
             builder: (context, state) => const NotificationsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminLibrary,
+            builder: (context, state) => const LibraryScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminBehavior,
+            builder: (context, state) => const BehaviorScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminSettings,
+            builder: (context, state) => const SchoolSettingsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminStudents,
+            builder: (context, state) => const StudentsDirectoryScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminAnnouncements,
+            builder: (context, state) => const AnnouncementsScreen(),
           ),
           GoRoute(
             path: AppRoutes.syncDiagnostics,
