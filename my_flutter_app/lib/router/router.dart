@@ -22,6 +22,8 @@ import '../screens/operations/bus_tracking_screen.dart';
 import '../screens/operations/marketplace_screen.dart';
 import '../screens/operations/sync_diagnostics_screen.dart';
 import '../screens/finance/school_finance_screen.dart';
+import '../screens/finance/invoices_screen.dart';
+import '../screens/finance/payments_ledger_screen.dart';
 import '../screens/finance/parent_fees_screen.dart';
 import '../screens/teacher/teacher_shell.dart';
 import '../screens/teacher/teacher_operations_screen.dart';
@@ -75,6 +77,8 @@ class AppRoutes {
 
   // Phase 6: Finance & Payments
   static const schoolAdminFinance = '/school-admin/finance';
+  static const schoolAdminInvoices = '/school-admin/finance/invoices';
+  static const schoolAdminPayments = '/school-admin/finance/payments';
   static const parentFees = '/parent/fees';
 
   // Phase 7: Sync Diagnostics
@@ -236,6 +240,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.schoolAdminFinance,
             builder: (context, state) => const SchoolFinanceScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminInvoices,
+            builder: (context, state) => const InvoicesScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminPayments,
+            builder: (context, state) => const PaymentsLedgerScreen(),
           ),
           GoRoute(
             path: AppRoutes.schoolAdminReports,
