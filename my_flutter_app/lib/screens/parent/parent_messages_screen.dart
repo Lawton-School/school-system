@@ -43,6 +43,15 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
     if (mounted) setState(() { _teacherContacts = contacts; _concerns = concerns; _meetings = meetings; });
   }
 
+  Future<void> _rescheduleMeeting(Map<String,dynamic> meeting) async {
+    final d=await showDatePicker(context:context,firstDate:DateTime.now(),lastDate:DateTime.now().add(const Duration(days:365)),initialDate:DateTime.now().add(const Duration(days:1)));if(d==null)return;
+    final t=await showTimePicker(context:context,initialTime:TimeOfDay.now());if(t==null)return;
+    final when=DateTime(d.year,d.month,d.day,t.hour,t.minute);
+    final ok=await ref.read(messagingRepositoryProvider).respondParentTeacherMeeting(meetingId:meeting['id'].toString(),status:'reschedule_requested',scheduledAt:when);
+    if(ok)await _loadTeachers();
+    if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(ok?'New meeting time proposed.':'Could not reschedule meeting.')));
+  }
+
   Future<void> _respondMeeting(Map<String,dynamic> meeting,String status) async {
     final ok=await ref.read(messagingRepositoryProvider).respondParentTeacherMeeting(meetingId:meeting['id'].toString(),status:status);
     if(ok)await _loadTeachers();
