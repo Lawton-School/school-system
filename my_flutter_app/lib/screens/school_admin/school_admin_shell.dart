@@ -489,7 +489,7 @@ class _CreateUserPageState extends ConsumerState<CreateUserPage> {
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
-                children: [AppRoles.teacher, AppRoles.student, AppRoles.parent].map((role) {
+                children: [AppRoles.teacher, AppRoles.student, AppRoles.parent, AppRoles.financeManager, AppRoles.registrar, AppRoles.reception].map((role) {
                   final isSelected = _selectedRole == role;
                   return ChoiceChip(
                     label: Text(AppRoles.displayName(role)),
@@ -718,6 +718,9 @@ class _UserListTile extends StatelessWidget {
       case AppRoles.teacher: return const Color(0xFF10B981);
       case AppRoles.student: return const Color(0xFF6366F1);
       case AppRoles.parent: return const Color(0xFF3B82F6);
+      case AppRoles.financeManager: return const Color(0xFF0F766E);
+      case AppRoles.registrar: return const Color(0xFF7C3AED);
+      case AppRoles.reception: return const Color(0xFF0891B2);
       default: return AppTheme.textMuted;
     }
   }
