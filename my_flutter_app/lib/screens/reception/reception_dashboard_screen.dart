@@ -89,7 +89,10 @@ class _ReceptionDashboardScreenState extends ConsumerState<ReceptionDashboardScr
                   contentPadding: EdgeInsets.zero, leading: const Icon(Icons.event_rounded),
                   title: Text(a['visitor_name']?.toString() ?? 'Visitor'),
                   subtitle: Text(a['purpose']?.toString() ?? ''),
-                  trailing: Text(a['status']?.toString() ?? 'scheduled'),
+                  trailing: TextButton(
+                    onPressed: () => _assignHost(context, 'appointment', a['id'].toString()),
+                    child: Text(a['assigned_name']?.toString() ?? 'Assign host'),
+                  ),
                 )),
               ])),
               const SizedBox(height: 10),
@@ -116,7 +119,19 @@ class _ReceptionDashboardScreenState extends ConsumerState<ReceptionDashboardScr
                 ..._mapList(d['visits']).where((v) => v['status']=='checked_in').take(6).map((v) => ListTile(
                   contentPadding: EdgeInsets.zero, leading: const Icon(Icons.person_pin_circle_outlined),
                   title: Text(v['visitor_name']?.toString() ?? 'Visitor'), subtitle: Text(v['purpose']?.toString() ?? ''),
-                  trailing: TextButton(onPressed: () async { await ref.read(admissionsRepositoryProvider).checkOutVisitor(v['id'].toString()); ref.invalidate(frontDeskWorkspaceProvider); }, child: const Text('Check out')),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (action) async {
+                      if (action == 'assign') { await _assignHost(context, 'visit', v['id'].toString()); }
+                      else { await ref.read(admissionsRepositoryProvider).setVisitWorkflow(v['id'].toString(), action); }
+                      ref.invalidate(frontDeskWorkspaceProvider);
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value:'assign',child:Text('Assign / notify host')),
+                      PopupMenuItem(value:'with_host',child:Text('With host')),
+                      PopupMenuItem(value:'completed',child:Text('Complete / check out')),
+                    ],
+                    child: Text(v['host_name']?.toString() ?? (v['workflow_status']?.toString() ?? 'Waiting')),
+                  ),
                 )),
               ])),
             ]),
@@ -171,6 +186,22 @@ class _ReceptionDashboardScreenState extends ConsumerState<ReceptionDashboardScr
       ),
     );
   }
+  Future<void> _assignHost(BuildContext context, String kind, String recordId) async {
+    final hosts = await ref.read(frontDeskHostsProvider.future);
+    if (!mounted) return;
+    final host = await showDialog<Map<String,dynamic>>(context: context, builder: (dc) => SimpleDialog(
+      title: const Text('Select staff host'),
+      children: hosts.map((h) => SimpleDialogOption(
+        onPressed: () => Navigator.pop(dc, h),
+        child: ListTile(leading: const Icon(Icons.person_outline), title: Text(h['name']?.toString() ?? 'Staff'), subtitle: Text(h['role']?.toString() ?? '')),
+      )).toList(),
+    ));
+    if (host == null) return;
+    await ref.read(admissionsRepositoryProvider).assignFrontDeskHost(kind: kind, recordId: recordId, hostProfileId: host['id'].toString());
+    ref.invalidate(frontDeskWorkspaceProvider);
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${host['name']} notified.')));
+  }
+
   Future<void> _showAppointmentDialog(BuildContext context) async {
     final session=ref.read(activeSessionProvider); if(session==null)return;
     final name=TextEditingController(), phone=TextEditingController(), purpose=TextEditingController();
