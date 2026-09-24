@@ -31,3 +31,7 @@ final admissionStudentCandidatesProvider =
 final frontDeskWorkspaceProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
   return ref.watch(admissionsRepositoryProvider).fetchFrontDeskWorkspace();
 });
+
+final frontDeskHostsProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+  return ref.watch(admissionsRepositoryProvider).fetchFrontDeskHosts();
+});
