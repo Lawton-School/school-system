@@ -125,7 +125,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          await ref.refresh(notificationCenterProvider.future);
+          _ = await ref.refresh(notificationCenterProvider.future);
         },
         child: centerAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
