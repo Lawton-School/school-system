@@ -1,12 +1,14 @@
 // ZivoConnect service barrel.
 //
-// Legacy non-AI services remain available without forcing a risky rewrite of
-// the large historical service file during the security cutover. Security-
-// critical Marketplace and Finance writes are replaced by server-authoritative
-// compatibility facades below.
+// Legacy services remain available without forcing a risky rewrite of the
+// large historical service file during the security cutover. Security-critical
+// Marketplace, Finance, Operations and AI paths are replaced by hardened
+// server-authoritative facades below.
 
-export 'legacy_services.dart' hide MarketplaceService, SchoolFinanceService;
+export 'legacy_services.dart'
+    hide MarketplaceService, SchoolFinanceService, SchoolOperationsService;
 export 'marketplace_service.dart';
 export 'finance_service.dart';
+export 'operations_service.dart';
 export 'secure_ai_services.dart';
 export 'profile_switch_service.dart';
