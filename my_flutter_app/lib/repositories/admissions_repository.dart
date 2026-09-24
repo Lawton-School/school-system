@@ -213,6 +213,24 @@ class AdmissionsRepository {
     }
   }
 
+  Future<List<Map<String, dynamic>>> fetchFrontDeskHosts() async {
+    return _mapList(await _client.rpc('get_front_desk_hosts'));
+  }
+
+  Future<void> assignFrontDeskHost({
+    required String kind, required String recordId, required String hostProfileId,
+  }) async {
+    await _client.rpc('assign_front_desk_host', params: {
+      'p_kind': kind, 'p_record_id': recordId, 'p_host_profile_id': hostProfileId,
+    });
+  }
+
+  Future<void> setVisitWorkflow(String visitId, String status) async {
+    await _client.rpc('set_front_desk_visit_workflow', params: {
+      'p_visit_id': visitId, 'p_status': status,
+    });
+  }
+
   Future<void> checkOutVisitor(String visitId) async {
     await _client.rpc('check_out_front_desk_visitor', params: {'p_visit_id': visitId});
   }
