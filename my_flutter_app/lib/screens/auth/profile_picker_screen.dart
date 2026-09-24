@@ -142,7 +142,7 @@ class ProfilePickerScreen extends ConsumerWidget {
       case AppRoles.registrar:
         return AppRoutes.studentEnrollments;
       case AppRoles.reception:
-        return AppRoutes.schoolAdminAdmissions;
+        return AppRoutes.receptionDashboard;
       default:
         return AppRoutes.profilePicker;
     }
