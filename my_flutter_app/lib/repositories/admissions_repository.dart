@@ -184,6 +184,43 @@ class AdmissionsRepository {
     });
   }
 
+  Future<Map<String, dynamic>> fetchFrontDeskWorkspace() async {
+    return _asMap(await _client.rpc('get_front_desk_workspace'));
+  }
+
+  Future<void> createAppointment({
+    required String schoolId, required String profileId, required String visitorName,
+    required String purpose, required DateTime appointmentAt, String? phone, String? email, String? notes,
+  }) async {
+    await _client.from('front_desk_appointments').insert({
+      'school_id': schoolId, 'created_by_profile_id': profileId, 'visitor_name': visitorName.trim(),
+      'visitor_phone': _nullableTrim(phone), 'visitor_email': _nullableTrim(email), 'purpose': purpose.trim(),
+      'appointment_at': appointmentAt.toIso8601String(), 'notes': _nullableTrim(notes),
+    });
+  }
+
+  Future<void> checkInVisitor({
+    required String schoolId, required String profileId, required String visitorName,
+    required String purpose, String? phone, String? organization, String? notes, String? appointmentId,
+  }) async {
+    await _client.from('front_desk_visits').insert({
+      'school_id': schoolId, 'created_by_profile_id': profileId, 'visitor_name': visitorName.trim(),
+      'visitor_phone': _nullableTrim(phone), 'organization': _nullableTrim(organization), 'purpose': purpose.trim(),
+      'notes': _nullableTrim(notes), 'appointment_id': _nullableTrim(appointmentId),
+    });
+    if (_nullableTrim(appointmentId) != null) {
+      await _client.from('front_desk_appointments').update({'status': 'arrived', 'updated_at': DateTime.now().toIso8601String()}).eq('id', appointmentId!);
+    }
+  }
+
+  Future<void> checkOutVisitor(String visitId) async {
+    await _client.rpc('check_out_front_desk_visitor', params: {'p_visit_id': visitId});
+  }
+
+  Future<void> setEnquiryStatus(String enquiryId, String status) async {
+    await _client.rpc('set_front_desk_enquiry_status', params: {'p_enquiry_id': enquiryId, 'p_status': status});
+  }
+
   Future<Map<String, dynamic>> linkEnrolledStudent({
     required String applicationId,
     required String studentProfileId,
