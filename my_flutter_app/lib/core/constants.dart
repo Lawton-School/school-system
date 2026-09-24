@@ -8,12 +8,6 @@ class AppConstants {
   static const String supabaseAnonKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRyeG5uaGp4anB5YWR3Y2NheG5rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMTc4NjEsImV4cCI6MjEwMTg5Mzg2MX0.q1vONwqQuqbYmn0GemxJimh5qkiRBIaKkgi5NyehkLU';
 
-  // OpenRouter DeepSeek Configuration for Live AI Tutor.
-  // Supply with: --dart-define=OPENROUTER_API_KEY=...
-  static const String openRouterApiKey =
-      String.fromEnvironment('OPENROUTER_API_KEY');
-  static const String aiModel = 'deepseek/deepseek-chat';
-
   // Local DB
   static const String localDbName = 'ems_local.db';
 

@@ -53,9 +53,16 @@ class ParentAttendanceScreen extends ConsumerWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.child_care_rounded, size: 48, color: AppTheme.textMuted),
+                  Icon(
+                    Icons.child_care_rounded,
+                    size: 48,
+                    color: AppTheme.textMuted,
+                  ),
                   SizedBox(height: 12),
-                  Text('No children linked to your account.', style: TextStyle(color: AppTheme.textMuted)),
+                  Text(
+                    'No children linked to your account.',
+                    style: TextStyle(color: AppTheme.textMuted),
+                  ),
                 ],
               ),
             );
@@ -92,10 +99,6 @@ class ParentAttendanceScreen extends ConsumerWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// SHARED: ATTENDANCE CALENDAR VIEW
-// ─────────────────────────────────────────────────────────────────
-
 class _AttendanceCalendarView extends ConsumerStatefulWidget {
   final String schoolId;
   final String studentProfileId;
@@ -108,10 +111,12 @@ class _AttendanceCalendarView extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<_AttendanceCalendarView> createState() => _AttendanceCalendarViewState();
+  ConsumerState<_AttendanceCalendarView> createState() =>
+      _AttendanceCalendarViewState();
 }
 
-class _AttendanceCalendarViewState extends ConsumerState<_AttendanceCalendarView> {
+class _AttendanceCalendarViewState
+    extends ConsumerState<_AttendanceCalendarView> {
   List<AttendanceEntryModel>? _records;
   bool _loading = true;
   String? _error;
@@ -122,19 +127,42 @@ class _AttendanceCalendarViewState extends ConsumerState<_AttendanceCalendarView
     _load();
   }
 
+  @override
+  void didUpdateWidget(covariant _AttendanceCalendarView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.schoolId != widget.schoolId ||
+        oldWidget.studentProfileId != widget.studentProfileId) {
+      _load();
+    }
+  }
+
   Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
     try {
       final client = ref.read(supabaseClientProvider);
-      final all = await SchoolOperationsService(client)
-          .getAttendanceEntries(widget.schoolId);
-      final filtered = all
-          .where((e) => e.studentProfileId == widget.studentProfileId)
-          .toList();
-      filtered.sort((a, b) => b.date.compareTo(a.date));
-      if (mounted) setState(() { _records = filtered; _loading = false; });
+      final records = await SchoolOperationsService(client).getAttendanceEntries(
+        widget.schoolId,
+        studentProfileId: widget.studentProfileId,
+      );
+      records.sort((a, b) => b.date.compareTo(a.date));
+
+      if (mounted) {
+        setState(() {
+          _records = records;
+          _loading = false;
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() { _error = e.toString(); _loading = false; });
+      if (mounted) {
+        setState(() {
+          _error = e.toString();
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -142,15 +170,18 @@ class _AttendanceCalendarViewState extends ConsumerState<_AttendanceCalendarView
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return Center(child: Text('Error: $_error'));
-    final records = _records ?? [];
 
-    // Compute stats
+    final records = _records ?? [];
     final total = records.length;
     final present = records.where((r) => r.status == 'present').length;
     final absent = records.where((r) => r.status == 'absent').length;
     final late = records.where((r) => r.status == 'late').length;
-    final excused = records.where((r) => r.status == 'excused').length;
-    final pct = total > 0 ? ((present + excused) / total * 100).toStringAsFixed(1) : '—';
+
+    // Keep the UI definition aligned with the backend attendance reports:
+    // present + late are counted as attended; excused is reported separately.
+    final pct = total > 0
+        ? ((present + late) / total * 100).toStringAsFixed(1)
+        : '—';
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -160,26 +191,47 @@ class _AttendanceCalendarViewState extends ConsumerState<_AttendanceCalendarView
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Stats row
             Row(
               children: [
-                _StatCard(label: 'Present', value: '$present', color: AppTheme.success),
+                _StatCard(
+                  label: 'Present',
+                  value: '$present',
+                  color: AppTheme.success,
+                ),
                 const SizedBox(width: 8),
-                _StatCard(label: 'Absent', value: '$absent', color: AppTheme.danger),
+                _StatCard(
+                  label: 'Absent',
+                  value: '$absent',
+                  color: AppTheme.danger,
+                ),
                 const SizedBox(width: 8),
-                _StatCard(label: 'Late', value: '$late', color: AppTheme.warning),
+                _StatCard(
+                  label: 'Late',
+                  value: '$late',
+                  color: AppTheme.warning,
+                ),
                 const SizedBox(width: 8),
-                _StatCard(label: 'Rate', value: '$pct%', color: AppTheme.primary),
+                _StatCard(
+                  label: 'Rate',
+                  value: '$pct%',
+                  color: AppTheme.primary,
+                ),
               ],
             ),
             const SizedBox(height: 24),
-            Text('Attendance History', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Attendance History',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 12),
             if (records.isEmpty)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(32),
-                  child: Text('No attendance records found.', style: TextStyle(color: AppTheme.textMuted)),
+                  child: Text(
+                    'No attendance records found.',
+                    style: TextStyle(color: AppTheme.textMuted),
+                  ),
                 ),
               )
             else
@@ -187,7 +239,10 @@ class _AttendanceCalendarViewState extends ConsumerState<_AttendanceCalendarView
                 final color = _statusColor(entry.status);
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: color.withAlpha(10),
                     border: Border(left: BorderSide(color: color, width: 4)),
@@ -204,22 +259,37 @@ class _AttendanceCalendarViewState extends ConsumerState<_AttendanceCalendarView
                           children: [
                             Text(
                               entry.dateLabel,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             if (entry.sectionName.isNotEmpty)
-                              Text(entry.sectionName, style: const TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                              Text(
+                                entry.sectionName,
+                                style: const TextStyle(
+                                  color: AppTheme.textMuted,
+                                  fontSize: 12,
+                                ),
+                              ),
                           ],
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: color.withAlpha(20),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           entry.status.toUpperCase(),
-                          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700),
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ],
@@ -234,11 +304,16 @@ class _AttendanceCalendarViewState extends ConsumerState<_AttendanceCalendarView
 
   Color _statusColor(String status) {
     switch (status.toLowerCase()) {
-      case 'present': return AppTheme.success;
-      case 'late': return AppTheme.warning;
-      case 'excused': return AppTheme.secondary;
-      case 'absent': return AppTheme.danger;
-      default: return AppTheme.textMuted;
+      case 'present':
+        return AppTheme.success;
+      case 'late':
+        return AppTheme.warning;
+      case 'excused':
+        return AppTheme.secondary;
+      case 'absent':
+        return AppTheme.danger;
+      default:
+        return AppTheme.textMuted;
     }
   }
 }
@@ -247,7 +322,12 @@ class _StatCard extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  const _StatCard({required this.label, required this.value, required this.color});
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -261,9 +341,22 @@ class _StatCard extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Text(value, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold)),
+            Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 2),
-            Text(label, style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppTheme.textMuted,
+                fontSize: 11,
+              ),
+            ),
           ],
         ),
       ),

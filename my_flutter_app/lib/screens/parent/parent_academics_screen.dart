@@ -6,7 +6,7 @@ import '../../models/models.dart';
 import '../../widgets/stitch_widgets.dart';
 
 /// Screen 07: Parent Academics & Student 360 View
-/// Connects to `get_student_360_summary(student_profile_id)` with zero mock fixtures.
+/// Uses the authoritative `get_parent_academics` RPC with zero mock fixtures.
 class ParentAcademicsScreen extends ConsumerWidget {
   const ParentAcademicsScreen({super.key});
 
@@ -18,7 +18,14 @@ class ParentAcademicsScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppTheme.stitchBg,
       appBar: AppBar(
-        title: const Text('Academics & Progress', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: AppTheme.stitchHeading)),
+        title: const Text(
+          'Academics & Progress',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+            color: AppTheme.stitchHeading,
+          ),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 1,
@@ -32,18 +39,21 @@ class ParentAcademicsScreen extends ConsumerWidget {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(32),
-                child: Text('No linked student profiles found.', style: TextStyle(color: AppTheme.stitchMuted)),
+                child: Text(
+                  'No linked student profiles found.',
+                  style: TextStyle(color: AppTheme.stitchMuted),
+                ),
               ),
             );
           }
 
           final child = activeChild ?? children.first;
-          final summaryAsync = ref.watch(student360SummaryProvider(child.studentId));
+          final academicsAsync = ref.watch(parentAcademicsProvider(child.studentId));
 
-          return summaryAsync.when(
+          return academicsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(child: Text('Error loading academics: $e')),
-            data: (summary) => _buildContent(context, ref, child, summary),
+            data: (academics) => _buildContent(context, child, academics),
           );
         },
       ),
@@ -52,26 +62,34 @@ class ParentAcademicsScreen extends ConsumerWidget {
 
   Widget _buildContent(
     BuildContext context,
-    WidgetRef ref,
     AuthorizedChild child,
-    Map<String, dynamic> summary,
+    Map<String, dynamic> academics,
   ) {
-    final kpis = summary['kpis'] as Map<String, dynamic>? ?? {};
-    final subjects = (summary['subjects'] as List<dynamic>?) ?? [];
-    final reportCard = summary['latest_report_card'] as Map<String, dynamic>? ?? {};
-    final recentAssessments = (summary['recent_assessments'] as List<dynamic>?) ?? [];
+    final bestSubject = _map(academics['best_subject']);
+    final reportCard = _map(academics['latest_report_card']);
+    final subjects = _listOfMaps(academics['subjects']);
+    final recentAssessments = _listOfMaps(academics['recent_assessments']);
 
-    final averageStr = kpis['academic_average'] != null ? '${kpis["academic_average"]}%' : '—';
-    final bestSubjectStr = kpis['best_subject']?.toString() ?? '—';
-    final assessmentsCount = kpis['assessments_count']?.toString() ?? '${recentAssessments.length}';
-    final reportCardsCount = kpis['reports_count']?.toString() ?? (reportCard.isNotEmpty ? '1' : '0');
+    final currentAverage = (academics['current_average'] as num?)?.toDouble();
+    final assessmentsCount =
+        (academics['assessment_count'] as num?)?.toInt() ?? recentAssessments.length;
+    final assessmentsThisMonth =
+        (academics['assessments_added_this_month'] as num?)?.toInt() ?? 0;
+    final reportCardsCount =
+        (academics['report_card_count'] as num?)?.toInt() ?? 0;
+    final bestSubjectName = bestSubject['subject']?.toString();
+    final bestSubjectAverage = (bestSubject['average'] as num?)?.toDouble();
+
+    final enrollmentLabel = child.className.trim();
+    final subtitle = enrollmentLabel.isNotEmpty && enrollmentLabel != 'Enrolled Class'
+        ? 'Enrolled in $enrollmentLabel · Real-time academic standing and progress'
+        : 'Real-time academic standing and progress';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -100,8 +118,11 @@ class ParentAcademicsScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Enrolled in ${child.className} · Real-time academic standing and progress',
-                      style: const TextStyle(fontSize: 13, color: AppTheme.stitchMuted),
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.stitchMuted,
+                      ),
                     ),
                   ],
                 ),
@@ -109,8 +130,6 @@ class ParentAcademicsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 20),
-
-          // 4 KPI Cards
           LayoutBuilder(
             builder: (context, constraints) {
               final isDesktop = constraints.maxWidth >= 960;
@@ -124,23 +143,31 @@ class ParentAcademicsScreen extends ConsumerWidget {
                 children: [
                   StitchKpiCard(
                     label: 'Current Average',
-                    value: averageStr,
-                    hint: kpis['term_label']?.toString() ?? 'Current Term',
+                    value: currentAverage == null
+                        ? '—'
+                        : '${currentAverage.toStringAsFixed(1)}%',
+                    hint: 'Current approved/published term',
                   ),
                   StitchKpiCard(
                     label: 'Best Subject',
-                    value: bestSubjectStr,
-                    hint: 'Top scoring subject',
-                    statusColor: StitchChipVariant.success,
+                    value: bestSubjectName?.isNotEmpty == true
+                        ? bestSubjectName!
+                        : '—',
+                    hint: bestSubjectAverage == null
+                        ? 'No subject average available'
+                        : '${bestSubjectAverage.toStringAsFixed(1)}% average',
+                    statusColor: bestSubjectName?.isNotEmpty == true
+                        ? StitchChipVariant.success
+                        : StitchChipVariant.neutral,
                   ),
                   StitchKpiCard(
                     label: 'Assessments',
-                    value: assessmentsCount,
-                    hint: 'Recorded grades',
+                    value: '$assessmentsCount',
+                    hint: '$assessmentsThisMonth added this month',
                   ),
                   StitchKpiCard(
                     label: 'Report Cards',
-                    value: reportCardsCount,
+                    value: '$reportCardsCount',
                     hint: 'Official published cards',
                     statusColor: StitchChipVariant.info,
                   ),
@@ -149,8 +176,6 @@ class ParentAcademicsScreen extends ConsumerWidget {
             },
           ),
           const SizedBox(height: 20),
-
-          // Two-column layout: Subject Performance + Latest Report Card
           LayoutBuilder(
             builder: (context, constraints) {
               final isDesktop = constraints.maxWidth >= 960;
@@ -158,32 +183,35 @@ class ParentAcademicsScreen extends ConsumerWidget {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(flex: 6, child: _buildSubjectPerformanceCard(subjects)),
+                    Expanded(
+                      flex: 6,
+                      child: _buildSubjectPerformanceCard(subjects),
+                    ),
                     const SizedBox(width: 18),
-                    Expanded(flex: 4, child: _buildLatestReportCardSummary(reportCard)),
-                  ],
-                );
-              } else {
-                return Column(
-                  children: [
-                    _buildSubjectPerformanceCard(subjects),
-                    const SizedBox(height: 16),
-                    _buildLatestReportCardSummary(reportCard),
+                    Expanded(
+                      flex: 4,
+                      child: _buildLatestReportCardSummary(reportCard),
+                    ),
                   ],
                 );
               }
+              return Column(
+                children: [
+                  _buildSubjectPerformanceCard(subjects),
+                  const SizedBox(height: 16),
+                  _buildLatestReportCardSummary(reportCard),
+                ],
+              );
             },
           ),
           const SizedBox(height: 20),
-
-          // Recent Assessments Card
           _buildRecentAssessmentsCard(recentAssessments),
         ],
       ),
     );
   }
 
-  Widget _buildSubjectPerformanceCard(List<dynamic> subjects) {
+  Widget _buildSubjectPerformanceCard(List<Map<String, dynamic>> subjects) {
     return StitchCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,7 +225,13 @@ class ParentAcademicsScreen extends ConsumerWidget {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(
-                child: Text('No subject grades published yet.', style: TextStyle(color: AppTheme.stitchMuted, fontSize: 13)),
+                child: Text(
+                  'No subject grades published yet.',
+                  style: TextStyle(
+                    color: AppTheme.stitchMuted,
+                    fontSize: 13,
+                  ),
+                ),
               ),
             )
           else
@@ -210,22 +244,95 @@ class ParentAcademicsScreen extends ConsumerWidget {
                 horizontalMargin: 8,
                 columnSpacing: 24,
                 columns: const [
-                  DataColumn(label: Text('SUBJECT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppTheme.stitchMuted))),
-                  DataColumn(label: Text('TEACHER', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppTheme.stitchMuted))),
-                  DataColumn(label: Text('AVERAGE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppTheme.stitchMuted))),
-                  DataColumn(label: Text('STATUS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppTheme.stitchMuted))),
+                  DataColumn(
+                    label: Text(
+                      'SUBJECT',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.stitchMuted,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      'TEACHER',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.stitchMuted,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      'AVERAGE',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.stitchMuted,
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Text(
+                      'TREND',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.stitchMuted,
+                      ),
+                    ),
+                  ),
                 ],
-                rows: subjects.map((sub) {
-                  final s = Map<String, dynamic>.from(sub as Map);
-                  final score = (s['average'] as num?)?.toDouble() ?? 0.0;
-                  final statusVariant = score >= 80 ? StitchChipVariant.success : (score >= 60 ? StitchChipVariant.primary : StitchChipVariant.warn);
+                rows: subjects.map((subject) {
+                  final score = (subject['average'] as num?)?.toDouble();
+                  final trend = (subject['trend'] as num?)?.toDouble();
+                  final trendLabel = trend == null
+                      ? '—'
+                      : '${trend > 0 ? '+' : ''}${trend.toStringAsFixed(1)} pts';
+                  final trendVariant = trend == null
+                      ? StitchChipVariant.neutral
+                      : trend >= 0
+                          ? StitchChipVariant.success
+                          : StitchChipVariant.warn;
 
-                  return DataRow(cells: [
-                    DataCell(Text(s['name']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                    DataCell(Text(s['teacher']?.toString() ?? 'Faculty', style: const TextStyle(fontSize: 12))),
-                    DataCell(Text('${score.toStringAsFixed(1)}%', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                    DataCell(StitchChip(label: score >= 80 ? 'Strong' : 'On Track', variant: statusVariant)),
-                  ]);
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        Text(
+                          subject['subject']?.toString() ?? '—',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          subject['teacher']?.toString().trim().isNotEmpty == true
+                              ? subject['teacher'].toString()
+                              : '—',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          score == null ? '—' : '${score.toStringAsFixed(1)}%',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        StitchChip(
+                          label: trendLabel,
+                          variant: trendVariant,
+                        ),
+                      ),
+                    ],
+                  );
                 }).toList(),
               ),
             ),
@@ -242,11 +349,20 @@ class ParentAcademicsScreen extends ConsumerWidget {
           children: [
             StitchSectionHeader(
               title: 'Latest Report Card',
-              trailing: StitchChip(label: 'Pending', variant: StitchChipVariant.neutral),
+              trailing: StitchChip(
+                label: 'Pending',
+                variant: StitchChipVariant.neutral,
+              ),
             ),
             SizedBox(height: 24),
             Center(
-              child: Text('No formal report cards published for this term.', style: TextStyle(color: AppTheme.stitchMuted, fontSize: 13)),
+              child: Text(
+                'No approved or published report card for this term.',
+                style: TextStyle(
+                  color: AppTheme.stitchMuted,
+                  fontSize: 13,
+                ),
+              ),
             ),
             SizedBox(height: 24),
           ],
@@ -254,10 +370,11 @@ class ParentAcademicsScreen extends ConsumerWidget {
       );
     }
 
-    final avg = (reportCard['average'] as num?)?.toDouble() ?? 0.0;
+    final average = (reportCard['average_percentage'] as num?)?.toDouble();
     final grade = reportCard['overall_grade']?.toString() ?? '—';
-    final att = reportCard['attendance_rate']?.toString() ?? '—';
-    final comment = reportCard['principal_comment']?.toString() ?? reportCard['teacher_comment']?.toString() ?? 'Consistent effort and positive academic participation.';
+    final attendance = (reportCard['attendance_rate'] as num?)?.toDouble();
+    final comment = reportCard['teacher_comments']?.toString().trim();
+    final status = reportCard['status']?.toString() ?? 'Report';
 
     return StitchCard(
       child: Column(
@@ -265,8 +382,12 @@ class ParentAcademicsScreen extends ConsumerWidget {
         children: [
           StitchSectionHeader(
             title: 'Latest Report Card',
-            trailing: Text(reportCard['term']?.toString() ?? 'Official Report',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.stitchSuccessText)),
+            trailing: StitchChip(
+              label: status,
+              variant: status == 'published'
+                  ? StitchChipVariant.success
+                  : StitchChipVariant.primary,
+            ),
           ),
           const SizedBox(height: 16),
           Row(
@@ -274,48 +395,100 @@ class ParentAcademicsScreen extends ConsumerWidget {
             children: [
               Column(
                 children: [
-                  Text('${avg.toStringAsFixed(1)}%', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppTheme.stitchHeading)),
+                  Text(
+                    average == null ? '—' : '${average.toStringAsFixed(1)}%',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.stitchHeading,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  const Text('AVERAGE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppTheme.stitchMuted)),
+                  const Text(
+                    'AVERAGE',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.stitchMuted,
+                    ),
+                  ),
                 ],
               ),
               Container(width: 1, height: 36, color: const Color(0xFFEEF2F6)),
               Column(
                 children: [
-                  Text(grade, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppTheme.primaryDark)),
+                  Text(
+                    grade,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.primaryDark,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  const Text('OVERALL', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppTheme.stitchMuted)),
+                  const Text(
+                    'OVERALL',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.stitchMuted,
+                    ),
+                  ),
                 ],
               ),
               Container(width: 1, height: 36, color: const Color(0xFFEEF2F6)),
               Column(
                 children: [
-                  Text(att, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: AppTheme.stitchSuccessText)),
+                  Text(
+                    attendance == null
+                        ? '—'
+                        : '${attendance.toStringAsFixed(1)}%',
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.stitchSuccessText,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  const Text('ATTENDANCE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppTheme.stitchMuted)),
+                  const Text(
+                    'ATTENDANCE',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.stitchMuted,
+                    ),
+                  ),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0EEFF),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFFDCD6FF)),
+          if (comment != null && comment.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0EEFF),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFDCD6FF)),
+              ),
+              child: Text(
+                'Teacher comment: $comment',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF4C3ADB),
+                ),
+              ),
             ),
-            child: Text(
-              'Teacher comment: $comment',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF4C3ADB)),
-            ),
-          ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildRecentAssessmentsCard(List<dynamic> recentAssessments) {
+  Widget _buildRecentAssessmentsCard(
+    List<Map<String, dynamic>> recentAssessments,
+  ) {
     return StitchCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,7 +502,13 @@ class ParentAcademicsScreen extends ConsumerWidget {
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 24),
               child: Center(
-                child: Text('No assessment submissions graded yet for this period.', style: TextStyle(color: AppTheme.stitchMuted, fontSize: 13)),
+                child: Text(
+                  'No assessment grades recorded for this term.',
+                  style: TextStyle(
+                    color: AppTheme.stitchMuted,
+                    fontSize: 13,
+                  ),
+                ),
               ),
             )
           else
@@ -348,20 +527,78 @@ class ParentAcademicsScreen extends ConsumerWidget {
                   DataColumn(label: Text('SCORE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppTheme.stitchMuted))),
                   DataColumn(label: Text('FEEDBACK', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppTheme.stitchMuted))),
                 ],
-                rows: recentAssessments.map((item) {
-                  final a = Map<String, dynamic>.from(item as Map);
-                  return DataRow(cells: [
-                    DataCell(Text(a['title']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13))),
-                    DataCell(Text(a['subject']?.toString() ?? '', style: const TextStyle(fontSize: 12))),
-                    DataCell(Text(a['date']?.toString() ?? '', style: const TextStyle(fontSize: 12, color: AppTheme.stitchMuted))),
-                    DataCell(Text(a['score']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: AppTheme.stitchSuccessText))),
-                    DataCell(StitchChip(label: a['feedback'] != null ? 'Available' : 'Graded', variant: StitchChipVariant.primary)),
-                  ]);
+                rows: recentAssessments.map((assessment) {
+                  final percentage =
+                      (assessment['percentage'] as num?)?.toDouble();
+                  final remarks =
+                      assessment['teacher_remarks']?.toString().trim();
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        Text(
+                          assessment['assessment']?.toString() ?? '—',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          assessment['subject']?.toString() ?? '—',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          assessment['date_administered']?.toString() ?? '—',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.stitchMuted,
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          percentage == null
+                              ? '—'
+                              : '${percentage.toStringAsFixed(1)}%',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                            color: AppTheme.stitchSuccessText,
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        StitchChip(
+                          label: remarks != null && remarks.isNotEmpty
+                              ? 'Available'
+                              : 'Graded',
+                          variant: StitchChipVariant.primary,
+                        ),
+                      ),
+                    ],
+                  );
                 }).toList(),
               ),
             ),
         ],
       ),
     );
+  }
+
+  static Map<String, dynamic> _map(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return const <String, dynamic>{};
+  }
+
+  static List<Map<String, dynamic>> _listOfMaps(dynamic value) {
+    if (value is! List) return const <Map<String, dynamic>>[];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
   }
 }
