@@ -1,0 +1,45 @@
+name: Fix Phase 4 Student runner
+
+on:
+  push:
+    branches:
+      - chatgpt/phase3-contracts
+    paths:
+      - '.github/workflows/fix_phase4_student_runner.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/phase3-contracts
+          fetch-depth: 0
+
+      - name: Remove unavailable formatter step
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path('.github/workflows/phase4_wire_student_dashboard.yml')
+          s = p.read_text()
+          block = """      - name: Format changed Dart file
+        run: dart format my_flutter_app/lib/screens/student/student_shell.dart
+
+"""
+          if s.count(block) != 1:
+              raise SystemExit(f'Expected formatter block once, found {s.count(block)}')
+          p.write_text(s.replace(block, '', 1))
+          PY
+
+      - name: Commit workflow repair
+        run: |
+          git config user.name "ZivoConnect CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/workflows/phase4_wire_student_dashboard.yml
+          git commit -m "Fix Student Dashboard one-shot runner"
+          git pull --rebase origin chatgpt/phase3-contracts
+          git push origin HEAD:chatgpt/phase3-contracts
