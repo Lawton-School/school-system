@@ -31,6 +31,7 @@ class AppRoles {
   static const String student = 'student';
   static const String financeManager = 'finance_manager';
   static const String registrar = 'registrar';
+  static const String reception = 'reception';
 
   static const List<String> all = [
     superAdmin,
@@ -40,6 +41,7 @@ class AppRoles {
     student,
     financeManager,
     registrar,
+    reception,
   ];
 
   static String displayName(String role) {
@@ -58,6 +60,8 @@ class AppRoles {
         return 'Finance Manager';
       case registrar:
         return 'Registrar';
+      case reception:
+        return 'Reception';
       default:
         return role;
     }
