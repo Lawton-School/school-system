@@ -113,6 +113,16 @@ class ParentRepository {
     return _rpc.getStudent360Summary(studentProfileId);
   }
 
+  Future<Map<String, dynamic>> fetchParentAcademics(
+    String studentProfileId, {
+    String? termId,
+  }) {
+    return _rpc.getParentAcademics(
+      studentProfileId: studentProfileId,
+      termId: termId,
+    );
+  }
+
   Future<List<InvoiceModel>> fetchStudentInvoices(
     String studentProfileId,
   ) async {
