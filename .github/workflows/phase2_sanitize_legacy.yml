@@ -1,0 +1,76 @@
+name: Phase 2 sanitize legacy AI
+
+on:
+  push:
+    branches:
+      - chatgpt/phase2-security
+    paths:
+      - '.github/workflows/phase2_sanitize_legacy.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  sanitize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Phase 2 branch
+        uses: actions/checkout@v4
+        with:
+          ref: chatgpt/phase2-security
+          fetch-depth: 0
+
+      - name: Remove legacy client-side AI implementation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          service_path = Path('my_flutter_app/lib/services/legacy_services.dart')
+          text = service_path.read_text()
+
+          start = text.find('class AiTutorService {')
+          end_marker = '// PHASE 6 SERVICE: SCHOOL FINANCE'
+          marker = text.find(end_marker, start)
+          if start < 0 or marker < 0:
+              raise SystemExit('Could not locate legacy AI block boundaries')
+
+          # Preserve the section divider directly before Phase 6.
+          divider = text.rfind('// ─', start, marker)
+          if divider < 0:
+              divider = marker
+
+          text = text[:start] + text[divider:]
+          text = text.replace("import 'package:http/http.dart' as http;\n", '')
+          service_path.write_text(text)
+
+          constants_path = Path('my_flutter_app/lib/core/constants.dart')
+          constants = constants_path.read_text()
+          constants = re.sub(
+              r"\n\s*// OpenRouter DeepSeek Configuration for Live AI Tutor\.\n"
+              r"\s*// Supply with: --dart-define=OPENROUTER_API_KEY=\.\.\.\n"
+              r"\s*static const String openRouterApiKey =\n"
+              r"\s*String\.fromEnvironment\('OPENROUTER_API_KEY'\);\n"
+              r"\s*static const String aiModel = 'deepseek/deepseek-chat';\n",
+              '\n',
+              constants,
+          )
+          if 'openRouterApiKey' in constants or 'OPENROUTER_API_KEY' in constants:
+              raise SystemExit('OpenRouter client configuration still present')
+          constants_path.write_text(constants)
+          PY
+
+      - name: Verify no client-side OpenRouter implementation remains
+        run: |
+          if grep -R -n -E 'openrouter\.ai|OPENROUTER_API_KEY|openRouterApiKey' my_flutter_app/lib; then
+            echo 'Client-side OpenRouter reference remains.' >&2
+            exit 1
+          fi
+
+      - name: Commit sanitized source
+        run: |
+          git config user.name "ZivoConnect CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add my_flutter_app/lib/services/legacy_services.dart my_flutter_app/lib/core/constants.dart
+          git commit -m "Remove legacy client-side OpenRouter implementation"
+          git push origin HEAD:chatgpt/phase2-security
