@@ -154,6 +154,36 @@ class AdmissionsRepository {
     return _asMap(response);
   }
 
+  Future<Map<String, dynamic>> frontDeskLookup(String query) async {
+    final response = await _client.rpc('reception_directory_lookup', params: {
+      'p_query': query.trim(),
+      'p_limit': 30,
+    });
+    return _asMap(response);
+  }
+
+  Future<void> createFrontDeskEnquiry({
+    required String schoolId,
+    required String profileId,
+    required String contactName,
+    required String subject,
+    String? phone,
+    String? email,
+    String enquiryType = 'general',
+    String? notes,
+  }) async {
+    await _client.from('front_desk_enquiries').insert({
+      'school_id': schoolId,
+      'created_by_profile_id': profileId,
+      'contact_name': contactName.trim(),
+      'contact_phone': _nullableTrim(phone),
+      'contact_email': _nullableTrim(email),
+      'enquiry_type': enquiryType,
+      'subject': subject.trim(),
+      'notes': _nullableTrim(notes),
+    });
+  }
+
   Future<Map<String, dynamic>> linkEnrolledStudent({
     required String applicationId,
     required String studentProfileId,
