@@ -26,3 +26,8 @@ final admissionStudentCandidatesProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   return ref.watch(admissionsRepositoryProvider).fetchStudentCandidates();
 });
+
+/// Reception front-desk enquiries, appointments and active visits.
+final frontDeskWorkspaceProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
+  return ref.watch(admissionsRepositoryProvider).fetchFrontDeskWorkspace();
+});
