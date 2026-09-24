@@ -21,6 +21,7 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
 
   Map<String, dynamic>? _selectedContact;
   List<DirectMessageItem> _messages = [];
+  List<Map<String, dynamic>> _teacherContacts = [];
   bool _loadingThread = false;
   bool _sendingMessage = false;
 
@@ -29,7 +30,13 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initRealtime();
+      _loadTeachers();
     });
+  }
+
+  Future<void> _loadTeachers() async {
+    final contacts = await ref.read(messagingRepositoryProvider).fetchTeacherParentContacts();
+    if (mounted) setState(() => _teacherContacts = contacts);
   }
 
   void _initRealtime() {
@@ -102,10 +109,19 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
 
     setState(() => _sendingMessage = true);
     final repo = ref.read(messagingRepositoryProvider);
-    final sent = await repo.sendMessage(
-      recipientProfileId: recipientId,
-      messageText: text,
-    );
+    final studentId = _selectedContact?['student_id']?.toString();
+    final subjectId = _selectedContact?['subject_id']?.toString();
+    final sent = studentId != null
+        ? await repo.sendTeacherParentMessage(
+            recipientProfileId: recipientId,
+            studentProfileId: studentId,
+            subjectId: subjectId,
+            messageText: text,
+          )
+        : await repo.sendMessage(
+            recipientProfileId: recipientId,
+            messageText: text,
+          );
 
     if (!mounted) return;
 
@@ -168,7 +184,23 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
       body: conversationsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Error loading messages: $err')),
-        data: (contacts) {
+        data: (messageContacts) {
+          final teacherContacts = _teacherContacts.map((x) => <String, dynamic>{
+            'profile_id': x['teacher_id'],
+            'name': x['teacher_name'],
+            'role': x['is_homeroom'] == true ? 'Class Teacher' : 'Teacher',
+            'student_id': x['student_id'],
+            'student_name': x['student_name'],
+            'subject_id': x['subject_id'],
+            'subject_name': x['subject_name'],
+            'last_message': x['subject_name'] ?? 'Teacher for '+(x['student_name']?.toString() ?? 'your child'),
+          }).where((x) => x['profile_id'] != null).toList();
+          final byKey = <String, Map<String, dynamic>>{};
+          for (final x in [...teacherContacts, ...messageContacts]) {
+            final key = x['profile_id'].toString()+'|'+(x['student_id']?.toString() ?? '');
+            byKey[key] = x;
+          }
+          final contacts = byKey.values.toList();
           if (contacts.isEmpty) {
             return Center(
               child: Padding(
