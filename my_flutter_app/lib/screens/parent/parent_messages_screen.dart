@@ -114,7 +114,7 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
     });
 
     final repo = ref.read(messagingRepositoryProvider);
-    final thread = await repo.fetchThread(otherId);
+    final thread = await repo.fetchThread(otherId, studentProfileId: contact['student_id']?.toString(), subjectId: contact['subject_id']?.toString());
 
     if (mounted) {
       setState(() {
@@ -222,7 +222,7 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
           }).where((x) => x['profile_id'] != null).toList();
           final byKey = <String, Map<String, dynamic>>{};
           for (final x in [...teacherContacts, ...messageContacts]) {
-            final key = x['profile_id'].toString()+'|'+(x['student_id']?.toString() ?? '');
+            final key = x['profile_id'].toString()+'|'+(x['student_id']?.toString() ?? '')+'|'+(x['subject_id']?.toString() ?? '');
             byKey[key] = x;
           }
           final contacts = byKey.values.toList();
@@ -313,6 +313,14 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
     );
   }
 
+  String _contactKey(Map<String,dynamic> c) => '${c['profile_id'] ?? ''}|${c['student_id'] ?? ''}|${c['subject_id'] ?? ''}';
+  String _contactLabel(Map<String,dynamic> c) {
+    final name=c['name']?.toString()??'Staff Member';
+    final student=c['student_name']?.toString(); final subject=c['subject_name']?.toString();
+    if(student==null)return name;
+    return subject==null?'$name — $student':'$name — $student · $subject';
+  }
+
   Widget _buildContactsPane(List<Map<String, dynamic>> contacts) {
     return Column(
       children: [
@@ -331,8 +339,7 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
                 const Divider(height: 1, color: Color(0xFFF1F5F9)),
             itemBuilder: (context, index) {
               final contact = contacts[index];
-              final isSelected =
-                  _selectedContact?['profile_id'] == contact['profile_id'];
+              final isSelected = _selectedContact?['profile_id'] == contact['profile_id'] && _selectedContact?['student_id'] == contact['student_id'] && _selectedContact?['subject_id'] == contact['subject_id'];
 
               return ListTile(
                 selected: isSelected,
@@ -390,7 +397,7 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             color: Colors.white,
             child: DropdownButtonFormField<String>(
-              initialValue: _selectedContact?['profile_id']?.toString(),
+              initialValue: _selectedContact == null ? null : _contactKey(_selectedContact!),
               decoration: InputDecoration(
                 labelText: 'Conversation',
                 border: OutlineInputBorder(
@@ -399,16 +406,16 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
                 isDense: true,
               ),
               items: contacts.map((contact) {
-                final id = contact['profile_id']?.toString() ?? '';
+                final id = _contactKey(contact);
                 return DropdownMenuItem<String>(
                   value: id,
-                  child: Text(contact['name']?.toString() ?? 'Staff Member'),
+                  child: Text(_contactLabel(contact)),
                 );
               }).where((item) => item.value?.isNotEmpty == true).toList(),
               onChanged: (id) {
                 if (id == null) return;
                 for (final contact in contacts) {
-                  if (contact['profile_id']?.toString() == id) {
+                  if (_contactKey(contact) == id) {
                     _selectContact(contact);
                     return;
                   }
