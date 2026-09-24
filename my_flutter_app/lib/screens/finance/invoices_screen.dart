@@ -66,7 +66,6 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
             onPressed: () => ref.invalidate(invoiceManagementProvider),
             icon: const Icon(Icons.refresh_rounded),
           ),
-          const SizedBox(width: 4),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: FilledButton.icon(
@@ -137,7 +136,6 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
     return StitchCard(
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final narrow = constraints.maxWidth < 700;
           final search = TextField(
             controller: _searchController,
             onChanged: (_) => setState(() {}),
@@ -166,10 +164,11 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
             ],
             onChanged: (value) => setState(() => _statusFilter = value ?? 'all'),
           );
+          final currencyValue = currencies.contains(_currencyFilter)
+              ? _currencyFilter
+              : 'all';
           final currency = DropdownButtonFormField<String>(
-            initialValue: currencies.contains(_currencyFilter)
-                ? _currencyFilter
-                : 'all',
+            initialValue: currencyValue,
             decoration: const InputDecoration(labelText: 'Currency'),
             items: [
               const DropdownMenuItem(value: 'all', child: Text('All currencies')),
@@ -180,7 +179,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
             onChanged: (value) => setState(() => _currencyFilter = value ?? 'all'),
           );
 
-          if (narrow) {
+          if (constraints.maxWidth < 700) {
             return Column(
               children: [
                 search,
@@ -217,12 +216,9 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
       final currency = invoice['currency']?.toString() ?? '';
       final invoiceNumber = invoice['invoice_number']?.toString().toLowerCase() ?? '';
       final student = invoice['student_name']?.toString().toLowerCase() ?? '';
-      final matchesQuery = query.isEmpty ||
-          invoiceNumber.contains(query) ||
-          student.contains(query);
-      final matchesStatus = _statusFilter == 'all' || status == _statusFilter;
-      final matchesCurrency = _currencyFilter == 'all' || currency == _currencyFilter;
-      return matchesQuery && matchesStatus && matchesCurrency;
+      return (query.isEmpty || invoiceNumber.contains(query) || student.contains(query)) &&
+          (_statusFilter == 'all' || status == _statusFilter) &&
+          (_currencyFilter == 'all' || currency == _currencyFilter);
     }).toList(growable: false);
   }
 
@@ -233,8 +229,9 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
     final currency = invoice['currency']?.toString() ?? 'UNSPECIFIED';
     final status = invoice['status']?.toString() ?? 'unpaid';
     final dueDate = _date(invoice['due_date']);
+    final today = DateTime.now();
     final overdue = dueDate != null &&
-        dueDate.isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day)) &&
+        dueDate.isBefore(DateTime(today.year, today.month, today.day)) &&
         status != 'paid';
 
     return Padding(
@@ -263,10 +260,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
                       const SizedBox(height: 3),
                       Text(
                         invoice['student_name']?.toString() ?? 'Unknown Student',
-                        style: const TextStyle(
-                          color: AppTheme.stitchMuted,
-                          fontSize: 12,
-                        ),
+                        style: const TextStyle(color: AppTheme.stitchMuted, fontSize: 12),
                       ),
                     ],
                   ),
@@ -293,9 +287,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
                 _Metric(label: 'Balance', value: '$currency ${balance.toStringAsFixed(2)}'),
                 _Metric(
                   label: 'Due',
-                  value: dueDate == null
-                      ? '—'
-                      : '${dueDate.day}/${dueDate.month}/${dueDate.year}',
+                  value: dueDate == null ? '—' : '${dueDate.day}/${dueDate.month}/${dueDate.year}',
                 ),
               ],
             ),
@@ -303,10 +295,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
               const SizedBox(height: 10),
               Text(
                 invoice['fee_structure_name'].toString(),
-                style: const TextStyle(
-                  color: AppTheme.stitchMuted,
-                  fontSize: 11,
-                ),
+                style: const TextStyle(color: AppTheme.stitchMuted, fontSize: 11),
               ),
             ],
           ],
@@ -316,16 +305,14 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
   }
 
   Future<void> _showGenerateDialog(BuildContext context) async {
-    final structuresAsync = ref.read(activeFeeStructuresProvider);
-    var structures = structuresAsync.asData?.value;
-    structures ??= await ref.read(activeFeeStructuresProvider.future);
+    final cached = ref.read(activeFeeStructuresProvider).asData?.value;
+    final List<Map<String, dynamic>> structures =
+        cached ?? await ref.read(activeFeeStructuresProvider.future);
 
     if (!context.mounted) return;
     if (structures.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No active fee structures are available for invoice generation.'),
-        ),
+        const SnackBar(content: Text('No active fee structures are available for invoice generation.')),
       );
       return;
     }
@@ -340,9 +327,9 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
-          final selected = structures!.firstWhere(
+          final selected = structures.firstWhere(
             (row) => row['id']?.toString() == selectedId,
-            orElse: () => structures!.first,
+            orElse: () => structures.first,
           );
           final currency = selected['currency']?.toString() ?? 'UNSPECIFIED';
 
@@ -357,20 +344,17 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
                   DropdownButtonFormField<String>(
                     initialValue: selectedId,
                     decoration: const InputDecoration(labelText: 'Fee Structure'),
-                    items: structures!.map((structure) {
+                    items: structures.map((structure) {
                       final id = structure['id']?.toString() ?? '';
                       final name = structure['name']?.toString() ?? 'Fee Structure';
                       final code = structure['currency']?.toString() ?? '—';
-                      return DropdownMenuItem(
-                        value: id,
-                        child: Text('$name · $code'),
-                      );
+                      return DropdownMenuItem(value: id, child: Text('$name · $code'));
                     }).toList(),
                     onChanged: submitting
                         ? null
                         : (value) {
                             if (value == null) return;
-                            final next = structures!.firstWhere(
+                            final next = structures.firstWhere(
                               (row) => row['id']?.toString() == value,
                             );
                             setDialogState(() {
@@ -394,9 +378,7 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
                                 firstDate: DateTime.now(),
                                 lastDate: DateTime.now().add(const Duration(days: 730)),
                               );
-                              if (picked != null) {
-                                setDialogState(() => dueDate = picked);
-                              }
+                              if (picked != null) setDialogState(() => dueDate = picked);
                             },
                       child: const Text('Change'),
                     ),
@@ -474,10 +456,8 @@ class _InvoicesScreenState extends ConsumerState<InvoicesScreen> {
 
   static double _number(dynamic value) => value is num ? value.toDouble() : 0.0;
 
-  static DateTime? _date(dynamic value) {
-    if (value == null) return null;
-    return DateTime.tryParse(value.toString());
-  }
+  static DateTime? _date(dynamic value) =>
+      value == null ? null : DateTime.tryParse(value.toString());
 
   static String _shortId(dynamic value) {
     final text = value?.toString() ?? '';
@@ -519,21 +499,11 @@ class _InvoiceSummary extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  entry.key,
-                  style: const TextStyle(
-                    color: AppTheme.primaryDark,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
+                Text(entry.key, style: const TextStyle(color: AppTheme.primaryDark, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 8),
                 Text(
                   '${entry.key} ${values['outstanding']!.toStringAsFixed(2)} outstanding',
-                  style: const TextStyle(
-                    color: AppTheme.stitchHeading,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
+                  style: const TextStyle(color: AppTheme.stitchHeading, fontWeight: FontWeight.w700, fontSize: 15),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -564,20 +534,12 @@ class _Metric extends StatelessWidget {
       children: [
         Text(
           label.toUpperCase(),
-          style: const TextStyle(
-            color: AppTheme.stitchMuted,
-            fontSize: 9.5,
-            fontWeight: FontWeight.w700,
-          ),
+          style: const TextStyle(color: AppTheme.stitchMuted, fontSize: 9.5, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 2),
         Text(
           value,
-          style: const TextStyle(
-            color: AppTheme.stitchHeading,
-            fontWeight: FontWeight.w700,
-            fontSize: 12.5,
-          ),
+          style: const TextStyle(color: AppTheme.stitchHeading, fontWeight: FontWeight.w700, fontSize: 12.5),
         ),
       ],
     );
