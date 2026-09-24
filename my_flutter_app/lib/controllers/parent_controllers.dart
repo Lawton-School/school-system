@@ -63,6 +63,13 @@ final parentDashboardDataProvider = FutureProvider.autoDispose<ParentDashboardDa
   );
 });
 
+/// Screen 07: authoritative academics view for a linked student.
+final parentAcademicsProvider = FutureProvider.autoDispose
+    .family<Map<String, dynamic>, String>((ref, studentProfileId) async {
+  final repo = ref.watch(parentRepositoryProvider);
+  return await repo.fetchParentAcademics(studentProfileId);
+});
+
 /// Screen 08: Student invoices provider (multi-currency, server-authoritative)
 final studentInvoicesProvider = FutureProvider.autoDispose.family<List<InvoiceModel>, String>((ref, studentProfileId) async {
   final repo = ref.watch(parentRepositoryProvider);
@@ -75,7 +82,8 @@ final studentPaymentsProvider = FutureProvider.autoDispose.family<List<PaymentMo
   return await repo.fetchStudentPayments(studentProfileId);
 });
 
-/// Screen 07: Student 360 summary provider
+/// Student 360 summary remains available for screens that need the complete
+/// cross-domain profile rather than the academics-specific contract.
 final student360SummaryProvider = FutureProvider.autoDispose.family<Map<String, dynamic>, String>((ref, studentProfileId) async {
   final repo = ref.watch(parentRepositoryProvider);
   return await repo.fetchStudent360(studentProfileId);
@@ -109,4 +117,3 @@ final parentMessagesControllerProvider =
   final repo = ref.watch(messagingRepositoryProvider);
   return ParentMessagesController(repo);
 });
-
