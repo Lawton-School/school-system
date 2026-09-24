@@ -18,6 +18,7 @@ import '../screens/school_admin/gradebook_setup_screen.dart';
 import '../screens/school_admin/school_reports_screen.dart';
 import '../screens/school_admin/notifications_screen.dart';
 import '../screens/school_admin/report_cards_screen.dart';
+import '../screens/school_admin/admissions_screen.dart';
 import '../screens/operations/bus_tracking_screen.dart';
 import '../screens/operations/marketplace_screen.dart';
 import '../screens/operations/sync_diagnostics_screen.dart';
@@ -62,8 +63,9 @@ class AppRoutes {
   static const studentEnrollments = '/school-admin/enrollments';
   static const parentStudentMapping = '/school-admin/parent-student-mapping';
 
-  // Phase 3: Operations & Leave
+  // Phase 3: Operations & Admissions
   static const schoolAdminOperations = '/school-admin/operations';
+  static const schoolAdminAdmissions = '/school-admin/admissions';
 
   // Phase 4: Gradebook & LMS
   static const schoolAdminGradebook = '/school-admin/gradebook-setup';
@@ -130,17 +132,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isOnLogin = state.uri.toString() == AppRoutes.login;
       final isOnProfilePicker = state.uri.toString() == AppRoutes.profilePicker;
 
-      // Not logged in → force to login
       if (!isLoggedIn) {
         return isOnLogin ? null : AppRoutes.login;
       }
 
-      // Logged in but no active session → pick profile
       if (isLoggedIn && activeSession == null) {
         return isOnProfilePicker ? null : AppRoutes.profilePicker;
       }
 
-      // Logged in + session → redirect away from auth screens
       if (isLoggedIn && activeSession != null && (isOnLogin || isOnProfilePicker)) {
         return _dashboardForRole(activeSession.role);
       }
@@ -157,7 +156,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ProfilePickerScreen(),
       ),
 
-      // ── Super Admin Shell ──────────────────────────────
       ShellRoute(
         builder: (context, state, child) => SuperAdminShell(child: child),
         routes: [
@@ -176,7 +174,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // ── School Admin Shell ──────────────────────────────
       ShellRoute(
         builder: (context, state, child) => SchoolAdminShell(child: child),
         routes: [
@@ -196,7 +193,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.schoolAdminStructure,
             builder: (context, state) => const AcademicStructurePage(),
           ),
-          // Phase 2 routes
           GoRoute(
             path: AppRoutes.academicYears,
             builder: (context, state) => const AcademicYearsScreen(),
@@ -224,6 +220,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.schoolAdminOperations,
             builder: (context, state) => const SchoolAdminOperationsPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminAdmissions,
+            builder: (context, state) => const AdmissionsScreen(),
           ),
           GoRoute(
             path: AppRoutes.schoolAdminGradebook,
@@ -268,26 +268,24 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // ── Teacher Shell ────────────────────────────────────
       ShellRoute(
-       builder: (context, state, child) => TeacherShell(child: child),
-       routes: [
-         GoRoute(
-           path: AppRoutes.teacherDashboard,
-           builder: (context, state) => const TeacherDashboardPage(),
-         ),
-         GoRoute(
-           path: AppRoutes.teacherOperations,
-           builder: (context, state) => const TeacherOperationsScreen(),
-         ),
-         GoRoute(
-           path: AppRoutes.teacherAiAssistant,
-           builder: (context, state) => const TeacherAiAssistantScreen(),
-         ),
-       ],
+        builder: (context, state, child) => TeacherShell(child: child),
+        routes: [
+          GoRoute(
+            path: AppRoutes.teacherDashboard,
+            builder: (context, state) => const TeacherDashboardPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.teacherOperations,
+            builder: (context, state) => const TeacherOperationsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.teacherAiAssistant,
+            builder: (context, state) => const TeacherAiAssistantScreen(),
+          ),
+        ],
       ),
 
-      // ── Parent Shell ─────────────────────────────────────
       ShellRoute(
         builder: (context, state, child) => ParentShell(child: child),
         routes: [
@@ -310,7 +308,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // ── Student Shell ────────────────────────────────────
       ShellRoute(
         builder: (context, state, child) => StudentShell(child: child),
         routes: [
@@ -343,7 +340,7 @@ String _dashboardForRole(String role) {
     case AppRoles.financeManager:
       return AppRoutes.schoolAdminFinance;
     case AppRoles.registrar:
-      return AppRoutes.studentEnrollments;
+      return AppRoutes.schoolAdminAdmissions;
     default:
       return AppRoutes.profilePicker;
   }
