@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../controllers/admissions_controllers.dart';
 import '../../core/theme.dart';
+import '../../core/constants.dart';
 import '../../widgets/stitch_widgets.dart';
 import '../../providers/providers.dart';
 
@@ -31,6 +32,8 @@ class _AdmissionsScreenState extends ConsumerState<AdmissionsScreen> {
   @override
   Widget build(BuildContext context) {
     final pipelineAsync = ref.watch(admissionsPipelineProvider);
+    final role = ref.watch(activeSessionProvider)?.role;
+    final isReception = role == AppRoles.reception;
 
     return Scaffold(
       backgroundColor: AppTheme.stitchBg,
@@ -94,6 +97,13 @@ class _AdmissionsScreenState extends ConsumerState<AdmissionsScreen> {
               children: [
                 _PipelineSummary(pipeline: pipeline, applications: applications),
                 const SizedBox(height: 18),
+                if (isReception)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 14),
+                    child: StitchCard(
+                      child: Text('Reception workspace · Capture applications, request missing information and prepare records for Registrar review. Admission decisions and enrollment are restricted.'),
+                    ),
+                  ),
                 _buildFilters(),
                 const SizedBox(height: 18),
                 StitchSectionHeader(
@@ -196,6 +206,7 @@ class _AdmissionsScreenState extends ConsumerState<AdmissionsScreen> {
   }
 
   Widget _buildApplicationCard(Map<String, dynamic> application) {
+    final isReception = ref.read(activeSessionProvider)?.role == AppRoles.reception;
     final displayStatus = application['display_status']?.toString() ??
         application['status']?.toString() ??
         'applied';
@@ -290,7 +301,7 @@ class _AdmissionsScreenState extends ConsumerState<AdmissionsScreen> {
                   icon: const Icon(Icons.fact_check_outlined, size: 16),
                   label: const Text('Review'),
                 ),
-                if (acceptedAndUnlinked)
+                if (acceptedAndUnlinked && !isReception)
                   FilledButton.icon(
                     onPressed: () => _showEnrollAcceptedDialog(application),
                     icon: const Icon(Icons.link_rounded, size: 16),
@@ -310,13 +321,14 @@ class _AdmissionsScreenState extends ConsumerState<AdmissionsScreen> {
   }
 
   Future<void> _showStatusDialog(Map<String, dynamic> application) async {
-    const statuses = <String, String>{
+    final isReception = ref.read(activeSessionProvider)?.role == AppRoles.reception;
+    final statuses = <String, String>{
       'applied': 'Applied',
       'review': 'Under Review',
       'info_requested': 'Information Requested',
-      'accepted': 'Accepted',
+      if (!isReception) 'accepted': 'Accepted',
       'waitlisted': 'Waitlisted',
-      'rejected': 'Rejected',
+      if (!isReception) 'rejected': 'Rejected',
     };
     var selected = application['status']?.toString() ?? 'applied';
     if (!statuses.containsKey(selected)) selected = 'applied';
