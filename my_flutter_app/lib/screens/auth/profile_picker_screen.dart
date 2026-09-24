@@ -26,18 +26,13 @@ class ProfilePickerScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 24),
-
-              // Header
               Text('Select Profile', style: Theme.of(context).textTheme.headlineLarge),
               const SizedBox(height: 8),
               Text(
                 'You have access to multiple accounts. Choose one to continue.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
-
               const SizedBox(height: 32),
-
-              // Profile list
               Expanded(
                 child: profilesAsync.when(
                   loading: () => const Center(child: CircularProgressIndicator()),
@@ -64,6 +59,7 @@ class ProfilePickerScreen extends ConsumerWidget {
                         },
                       );
                     }
+
                     return ListView.separated(
                       itemCount: profiles.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 12),
@@ -72,15 +68,40 @@ class ProfilePickerScreen extends ConsumerWidget {
                         return _ProfileCard(
                           profile: profile,
                           onTap: () async {
-                            final session = ActiveSession(
-                              schoolId: profile.schoolId,
-                              schoolName: profile.school?.name ?? 'Unknown School',
-                              profileId: profile.id,
-                              role: profile.role,
-                            );
-                            await ref.read(activeSessionProvider.notifier).setActiveSession(session);
-                            if (context.mounted) {
-                              context.go(_dashboardForRole(profile.role));
+                            try {
+                              // Server-authoritative switch: Flutter sends only
+                              // the selected profile id. Supabase derives and
+                              // signs the school/role/profile claims, then this
+                              // service refreshes the auth session before local
+                              // application context changes.
+                              final switched = await ProfileSwitchService(client)
+                                  .switchProfile(profile.id);
+
+                              final session = ActiveSession(
+                                schoolId: switched.schoolId,
+                                schoolName: profile.school?.name ?? 'Unknown School',
+                                profileId: switched.profileId,
+                                role: switched.role,
+                              );
+
+                              await ref
+                                  .read(activeSessionProvider.notifier)
+                                  .setActiveSession(session);
+
+                              if (context.mounted) {
+                                context.go(_dashboardForRole(switched.role));
+                              }
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Could not switch profile. Please try again. ${e.toString()}',
+                                    ),
+                                    backgroundColor: AppTheme.danger,
+                                  ),
+                                );
+                              }
                             }
                           },
                         );
@@ -89,10 +110,7 @@ class ProfilePickerScreen extends ConsumerWidget {
                   },
                 ),
               ),
-
               const SizedBox(height: 16),
-
-              // Sign out
               TextButton.icon(
                 onPressed: () async {
                   await AuthService(client).signOut();
@@ -146,7 +164,6 @@ class _ProfileCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              // Avatar
               Container(
                 width: 52,
                 height: 52,
@@ -170,8 +187,6 @@ class _ProfileCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-
-              // Name & School
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -188,8 +203,6 @@ class _ProfileCard extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // Role badge
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
@@ -206,7 +219,6 @@ class _ProfileCard extends StatelessWidget {
                   ),
                 ),
               ),
-
               const SizedBox(width: 8),
               const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppTheme.textMuted),
             ],
