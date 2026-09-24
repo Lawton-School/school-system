@@ -96,7 +96,7 @@ class ProfilePickerScreen extends ConsumerWidget {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      'Could not switch profile. Please try again. ${e.toString()}',
+                                      'Could not switch profile. Please try again.',
                                     ),
                                     backgroundColor: AppTheme.danger,
                                   ),
