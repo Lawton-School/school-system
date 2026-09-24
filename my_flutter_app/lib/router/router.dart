@@ -19,6 +19,7 @@ import '../screens/school_admin/school_reports_screen.dart';
 import '../screens/school_admin/notifications_screen.dart';
 import '../screens/school_admin/report_cards_screen.dart';
 import '../screens/school_admin/admissions_screen.dart';
+import '../screens/school_admin/direct_messaging_screen.dart';
 import '../screens/operations/bus_tracking_screen.dart';
 import '../screens/operations/marketplace_screen.dart';
 import '../screens/operations/sync_diagnostics_screen.dart';
@@ -66,6 +67,7 @@ class AppRoutes {
   // Phase 3: Operations & Admissions
   static const schoolAdminOperations = '/school-admin/operations';
   static const schoolAdminAdmissions = '/school-admin/admissions';
+  static const schoolAdminMessages = '/school-admin/messages';
 
   // Phase 4: Gradebook & LMS
   static const schoolAdminGradebook = '/school-admin/gradebook-setup';
@@ -224,6 +226,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.schoolAdminAdmissions,
             builder: (context, state) => const AdmissionsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminMessages,
+            builder: (context, state) => const DirectMessagingScreen(),
           ),
           GoRoute(
             path: AppRoutes.schoolAdminGradebook,
