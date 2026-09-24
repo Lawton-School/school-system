@@ -91,7 +91,7 @@ class ProfilePickerScreen extends ConsumerWidget {
                               if (context.mounted) {
                                 context.go(_dashboardForRole(switched.role));
                               }
-                            } catch (e) {
+                            } catch (_) {
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
