@@ -22,6 +22,7 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
   Map<String, dynamic>? _selectedContact;
   List<DirectMessageItem> _messages = [];
   List<Map<String, dynamic>> _teacherContacts = [];
+  List<Map<String, dynamic>> _concerns = [];
   bool _loadingThread = false;
   bool _sendingMessage = false;
 
@@ -36,7 +37,14 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
 
   Future<void> _loadTeachers() async {
     final contacts = await ref.read(messagingRepositoryProvider).fetchTeacherParentContacts();
-    if (mounted) setState(() => _teacherContacts = contacts);
+    final concerns = await ref.read(messagingRepositoryProvider).fetchStudentConcerns();
+    if (mounted) setState(() { _teacherContacts = contacts; _concerns = concerns; });
+  }
+
+  Future<void> _acknowledge(Map<String,dynamic> concern) async {
+    final ok=await ref.read(messagingRepositoryProvider).acknowledgeStudentConcern(concern['id'].toString());
+    if(ok) await _loadTeachers();
+    if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(ok?'Feedback acknowledged.':'Could not acknowledge feedback.')));
   }
 
   void _initRealtime() {
