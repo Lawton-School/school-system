@@ -34,6 +34,7 @@ class _ReceptionDashboardScreenState extends ConsumerState<ReceptionDashboardScr
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(activeSessionProvider);
     final pipeline = ref.watch(admissionsPipelineProvider);
+    final frontDesk = ref.watch(frontDeskWorkspaceProvider);
     return Scaffold(
       backgroundColor: AppTheme.stitchBg,
       appBar: AppBar(title: const Text('Reception'), actions: [
@@ -68,6 +69,57 @@ class _ReceptionDashboardScreenState extends ConsumerState<ReceptionDashboardScr
                 ]);
               });
             },
+          ),
+          const SizedBox(height: 24),
+          Text('Enquiries, Appointments & Visitors', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 10),
+          frontDesk.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => StitchCard(child: Text('Unable to load front desk operations: $e')),
+            data: (d) => Column(children: [
+              Row(children: [
+                Expanded(child: StitchKpiCard(label: 'Open Enquiries', value: '${d['open_enquiries'] ?? 0}', hint: 'Needs follow-up', icon: Icons.support_agent_rounded)),
+                const SizedBox(width: 10),
+                Expanded(child: StitchKpiCard(label: 'Visitors On Site', value: '${d['visitors_on_site'] ?? 0}', hint: 'Currently checked in', icon: Icons.badge_outlined)),
+              ]),
+              const SizedBox(height: 10),
+              StitchCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text("Today's Appointments · ${d['today_appointments'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.w800)),
+                ..._mapList(d['appointments']).take(4).map((a) => ListTile(
+                  contentPadding: EdgeInsets.zero, leading: const Icon(Icons.event_rounded),
+                  title: Text(a['visitor_name']?.toString() ?? 'Visitor'),
+                  subtitle: Text(a['purpose']?.toString() ?? ''),
+                  trailing: Text(a['status']?.toString() ?? 'scheduled'),
+                )),
+              ])),
+              const SizedBox(height: 10),
+              StitchCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Recent Enquiries', style: TextStyle(fontWeight: FontWeight.w800)),
+                ..._mapList(d['enquiries']).take(4).map((e) => ListTile(
+                  contentPadding: EdgeInsets.zero, leading: const Icon(Icons.contact_support_outlined),
+                  title: Text(e['subject']?.toString() ?? 'Enquiry'),
+                  subtitle: Text(e['contact_name']?.toString() ?? ''),
+                  trailing: PopupMenuButton<String>(
+                    initialValue: e['status']?.toString(),
+                    onSelected: (s) async { await ref.read(admissionsRepositoryProvider).setEnquiryStatus(e['id'].toString(), s); ref.invalidate(frontDeskWorkspaceProvider); },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value:'open',child:Text('Open')), PopupMenuItem(value:'in_progress',child:Text('In Progress')),
+                      PopupMenuItem(value:'resolved',child:Text('Resolved')), PopupMenuItem(value:'closed',child:Text('Closed')),
+                    ],
+                    child: Text(e['status']?.toString() ?? 'open'),
+                  ),
+                )),
+              ])),
+              const SizedBox(height: 10),
+              StitchCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Visitors On Site', style: TextStyle(fontWeight: FontWeight.w800)),
+                ..._mapList(d['visits']).where((v) => v['status']=='checked_in').take(6).map((v) => ListTile(
+                  contentPadding: EdgeInsets.zero, leading: const Icon(Icons.person_pin_circle_outlined),
+                  title: Text(v['visitor_name']?.toString() ?? 'Visitor'), subtitle: Text(v['purpose']?.toString() ?? ''),
+                  trailing: TextButton(onPressed: () async { await ref.read(admissionsRepositoryProvider).checkOutVisitor(v['id'].toString()); ref.invalidate(frontDeskWorkspaceProvider); }, child: const Text('Check out')),
+                )),
+              ])),
+            ]),
           ),
           const SizedBox(height: 24),
           Text('Student & Parent Lookup', style: Theme.of(context).textTheme.titleLarge),
@@ -107,6 +159,10 @@ class _ReceptionDashboardScreenState extends ConsumerState<ReceptionDashboardScr
           const SizedBox(height: 10),
           _ActionCard(icon: Icons.support_agent_rounded, title: 'Record Enquiry', subtitle: 'Capture a parent, visitor or prospective-family enquiry for follow-up.', onTap: () => _showEnquiryDialog(context)),
           const SizedBox(height: 10),
+          _ActionCard(icon: Icons.event_available_rounded, title: 'Book Appointment', subtitle: 'Schedule a parent, prospective-family or visitor appointment.', onTap: () => _showAppointmentDialog(context)),
+          const SizedBox(height: 10),
+          _ActionCard(icon: Icons.login_rounded, title: 'Visitor Check-in', subtitle: 'Register a walk-in visitor currently on school premises.', onTap: () => _showVisitorDialog(context)),
+          const SizedBox(height: 10),
           const StitchCard(child: Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Row(children: [
             Icon(Icons.admin_panel_settings_outlined, color: AppTheme.stitchMuted), SizedBox(width: 12),
             Expanded(child: Text('Admission decisions and student enrollment are reserved for Registrar or School Admin.', style: TextStyle(color: AppTheme.stitchMuted))),
@@ -115,6 +171,42 @@ class _ReceptionDashboardScreenState extends ConsumerState<ReceptionDashboardScr
       ),
     );
   }
+  Future<void> _showAppointmentDialog(BuildContext context) async {
+    final session=ref.read(activeSessionProvider); if(session==null)return;
+    final name=TextEditingController(), phone=TextEditingController(), purpose=TextEditingController();
+    DateTime when=DateTime.now().add(const Duration(hours:1));
+    await showDialog<void>(context:context,builder:(dc)=>StatefulBuilder(builder:(context,setD)=>AlertDialog(
+      title:const Text('Book Appointment'),content:SizedBox(width:520,child:Column(mainAxisSize:MainAxisSize.min,children:[
+        TextField(controller:name,decoration:const InputDecoration(labelText:'Visitor name *')),const SizedBox(height:10),
+        TextField(controller:phone,decoration:const InputDecoration(labelText:'Phone')),const SizedBox(height:10),
+        TextField(controller:purpose,decoration:const InputDecoration(labelText:'Purpose *')),const SizedBox(height:10),
+        ListTile(contentPadding:EdgeInsets.zero,title:const Text('Appointment'),subtitle:Text('${when.day}/${when.month}/${when.year} ${when.hour.toString().padLeft(2,'0')}:${when.minute.toString().padLeft(2,'0')}'),
+          trailing:const Icon(Icons.edit_calendar_rounded),onTap:()async{final d=await showDatePicker(context:context,firstDate:DateTime.now(),lastDate:DateTime.now().add(const Duration(days:365)),initialDate:when);if(d==null)return;final t=await showTimePicker(context:context,initialTime:TimeOfDay.fromDateTime(when));if(t!=null)setD(()=>when=DateTime(d.year,d.month,d.day,t.hour,t.minute));}),
+      ])),actions:[TextButton(onPressed:()=>Navigator.pop(dc),child:const Text('Cancel')),FilledButton(onPressed:()async{
+        if(name.text.trim().isEmpty||purpose.text.trim().isEmpty)return;
+        await ref.read(admissionsRepositoryProvider).createAppointment(schoolId:session.schoolId,profileId:session.profileId,visitorName:name.text,purpose:purpose.text,appointmentAt:when,phone:phone.text);
+        ref.invalidate(frontDeskWorkspaceProvider);if(dc.mounted)Navigator.pop(dc);
+      },child:const Text('Book'))],
+    )));
+    name.dispose();phone.dispose();purpose.dispose();
+  }
+
+  Future<void> _showVisitorDialog(BuildContext context) async {
+    final session=ref.read(activeSessionProvider); if(session==null)return;
+    final name=TextEditingController(), phone=TextEditingController(), org=TextEditingController(), purpose=TextEditingController();
+    await showDialog<void>(context:context,builder:(dc)=>AlertDialog(title:const Text('Visitor Check-in'),content:SizedBox(width:520,child:Column(mainAxisSize:MainAxisSize.min,children:[
+      TextField(controller:name,decoration:const InputDecoration(labelText:'Visitor name *')),const SizedBox(height:10),
+      TextField(controller:phone,decoration:const InputDecoration(labelText:'Phone')),const SizedBox(height:10),
+      TextField(controller:org,decoration:const InputDecoration(labelText:'Organisation')),const SizedBox(height:10),
+      TextField(controller:purpose,decoration:const InputDecoration(labelText:'Purpose *')),
+    ])),actions:[TextButton(onPressed:()=>Navigator.pop(dc),child:const Text('Cancel')),FilledButton(onPressed:()async{
+      if(name.text.trim().isEmpty||purpose.text.trim().isEmpty)return;
+      await ref.read(admissionsRepositoryProvider).checkInVisitor(schoolId:session.schoolId,profileId:session.profileId,visitorName:name.text,purpose:purpose.text,phone:phone.text,organization:org.text);
+      ref.invalidate(frontDeskWorkspaceProvider);if(dc.mounted)Navigator.pop(dc);
+    },child:const Text('Check in'))]));
+    name.dispose();phone.dispose();org.dispose();purpose.dispose();
+  }
+
   Future<void> _showEnquiryDialog(BuildContext context) async {
     final session = ref.read(activeSessionProvider); if (session == null) return;
     final name = TextEditingController(); final phone = TextEditingController(); final subject = TextEditingController(); final notes = TextEditingController();
@@ -134,6 +226,7 @@ class _ReceptionDashboardScreenState extends ConsumerState<ReceptionDashboardScr
             schoolId: session.schoolId, profileId: session.profileId, contactName: name.text, phone: phone.text, subject: subject.text, notes: notes.text,
           );
           if (dialogContext.mounted) Navigator.pop(dialogContext);
+          ref.invalidate(frontDeskWorkspaceProvider);
           if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enquiry recorded.')));
         }, child: const Text('Save Enquiry')),
       ],
