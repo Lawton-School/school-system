@@ -67,6 +67,44 @@ class MessagingRepository {
     }
   }
 
+  /// Returns active profiles in the currently selected school that can be
+  /// selected when starting a new direct-message conversation.
+  Future<List<Map<String, dynamic>>> fetchAvailableContacts() async {
+    final myProfileId = _getActiveProfileId();
+    final schoolId = _getActiveSchoolId();
+    if (myProfileId == null ||
+        myProfileId.isEmpty ||
+        schoolId == null ||
+        schoolId.isEmpty) {
+      return [];
+    }
+
+    try {
+      final response = await _client
+          .from('profiles')
+          .select('id, first_name, last_name, role, status')
+          .eq('school_id', schoolId)
+          .eq('status', 'active')
+          .neq('id', myProfileId)
+          .isFilter('deleted_at', null)
+          .order('first_name', ascending: true)
+          .order('last_name', ascending: true);
+
+      final list = (response as List<dynamic>?) ?? [];
+      return list.map((raw) {
+        final profile = Map<String, dynamic>.from(raw as Map);
+        return <String, dynamic>{
+          'profile_id': profile['id'],
+          'name': _profileName(profile),
+          'role': profile['role'] ?? 'staff',
+        };
+      }).toList(growable: false);
+    } catch (e) {
+      debugPrint('[MessagingRepository] fetchAvailableContacts error: $e');
+      return [];
+    }
+  }
+
   Future<List<DirectMessageItem>> fetchThread(String otherProfileId) async {
     final myProfileId = _getActiveProfileId();
     if (myProfileId == null || myProfileId.isEmpty) return [];
