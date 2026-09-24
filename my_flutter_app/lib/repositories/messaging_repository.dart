@@ -206,23 +206,25 @@ class MessagingRepository {
     }
   }
 
-  Future<List<DirectMessageItem>> fetchThread(String otherProfileId) async {
+  Future<List<DirectMessageItem>> fetchThread(String otherProfileId, {String? studentProfileId, String? subjectId}) async {
     final myProfileId = _getActiveProfileId();
     if (myProfileId == null || myProfileId.isEmpty) return [];
 
     try {
-      final response = await _client
+      var query = _client
           .from('direct_messages')
           .select(
-            'id, school_id, sender_profile_id, recipient_profile_id, message, created_at, '
+            'id, school_id, sender_profile_id, recipient_profile_id, message, created_at, context_student_id, context_subject_id, '
             'sender:profiles!direct_messages_sender_profile_id_fkey(id, first_name, last_name, role)',
           )
           .or(
             'and(sender_profile_id.eq.$myProfileId,recipient_profile_id.eq.$otherProfileId),'
             'and(sender_profile_id.eq.$otherProfileId,recipient_profile_id.eq.$myProfileId)',
           )
-          .isFilter('deleted_at', null)
-          .order('created_at', ascending: true);
+          .isFilter('deleted_at', null);
+      if (studentProfileId != null) query = query.eq('context_student_id', studentProfileId);
+      if (subjectId != null) query = query.eq('context_subject_id', subjectId);
+      final response = await query.order('created_at', ascending: true);
 
       final list = (response as List<dynamic>?) ?? [];
       return list.map((raw) {
