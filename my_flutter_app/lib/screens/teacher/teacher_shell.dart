@@ -191,6 +191,17 @@ class TeacherDashboardPage extends ConsumerWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         ),
                       ),
+                      OutlinedButton.icon(
+                        onPressed: () => context.go('/teacher/parent-engagement'),
+                        icon: const Icon(Icons.family_restroom_rounded, size: 16),
+                        label: const Text('Parents'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.stitchHeading,
+                          side: const BorderSide(color: AppTheme.stitchBorder),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        ),
+                      ),
                       ElevatedButton.icon(
                         onPressed: () => context.go('/teacher/operations'),
                         icon: const Icon(Icons.fact_check_rounded, size: 16, color: Colors.white),
