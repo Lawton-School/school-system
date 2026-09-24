@@ -84,6 +84,76 @@ class AdmissionsRepository {
     return _asMap(response);
   }
 
+  Future<Map<String, dynamic>> createApplication({
+    required String firstName,
+    required String lastName,
+    required DateTime dateOfBirth,
+    required String parentName,
+    String? email,
+    String? phone,
+    String? parentEmail,
+    String? parentPhone,
+    String? requestedClassId,
+    String? requestedAcademicYearId,
+    String? previousSchool,
+    String? middleName,
+    String? gender,
+    String? nationality,
+    String? identityNumber,
+    String? curriculum,
+    String? attendanceType,
+    String? guardianRelationship,
+    String? guardianAddress,
+    String? guardianOccupation,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+    String? medicalNotes,
+  }) async {
+    final response = await _client.rpc('create_admission_application', params: {
+      'p_first_name': firstName.trim(),
+      'p_last_name': lastName.trim(),
+      'p_date_of_birth': dateOfBirth.toIso8601String().split('T').first,
+      'p_email': _nullableTrim(email) ?? '',
+      'p_parent_name': parentName.trim(),
+      'p_requested_class_id': _nullableTrim(requestedClassId),
+      'p_requested_academic_year_id': _nullableTrim(requestedAcademicYearId),
+      'p_phone': _nullableTrim(phone),
+      'p_parent_email': _nullableTrim(parentEmail),
+      'p_parent_phone': _nullableTrim(parentPhone),
+      'p_previous_school': _nullableTrim(previousSchool),
+      'p_middle_name': _nullableTrim(middleName),
+      'p_gender': _nullableTrim(gender),
+      'p_nationality': _nullableTrim(nationality),
+      'p_identity_number': _nullableTrim(identityNumber),
+      'p_curriculum': _nullableTrim(curriculum),
+      'p_attendance_type': _nullableTrim(attendanceType),
+      'p_guardian_relationship': _nullableTrim(guardianRelationship),
+      'p_guardian_address': _nullableTrim(guardianAddress),
+      'p_guardian_occupation': _nullableTrim(guardianOccupation),
+      'p_emergency_contact_name': _nullableTrim(emergencyContactName),
+      'p_emergency_contact_phone': _nullableTrim(emergencyContactPhone),
+      'p_medical_notes': _nullableTrim(medicalNotes),
+    });
+    return _asMap(response);
+  }
+
+  Future<Map<String, dynamic>> enrollAcceptedApplication({
+    required String applicationId,
+    required String classSectionId,
+    required String academicYearId,
+    String? rollNumber,
+    String? admissionNumber,
+  }) async {
+    final response = await _client.rpc('enroll_accepted_application', params: {
+      'p_application_id': applicationId,
+      'p_class_section_id': classSectionId,
+      'p_academic_year_id': academicYearId,
+      'p_roll_number': _nullableTrim(rollNumber),
+      'p_admission_number': _nullableTrim(admissionNumber),
+    });
+    return _asMap(response);
+  }
+
   Future<Map<String, dynamic>> linkEnrolledStudent({
     required String applicationId,
     required String studentProfileId,
