@@ -7,3 +7,4 @@
 
 export 'legacy_services.dart' hide AiTutorService, TeacherAiService;
 export 'secure_ai_services.dart';
+export 'profile_switch_service.dart';
