@@ -693,7 +693,7 @@ class _ReportRemarksTab extends ConsumerStatefulWidget {
 }
 
 class _ReportRemarksTabState extends ConsumerState<_ReportRemarksTab> {
-  final TextEditingController _studentNameCtrl = TextEditingController(text: 'Tariro Moyo');
+  final TextEditingController _studentNameCtrl = TextEditingController();
   final TextEditingController _focusCtrl = TextEditingController(text: 'Strong in problem solving, needs to review exam timing');
   String _selectedSubject = 'Mathematics';
   String _grade = 'A (82%)';

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/theme.dart';
 
-enum StitchChipVariant { primary, success, warn, danger, info, neutral }
+enum StitchChipVariant { primary, success, warn, danger, error, info, neutral }
 
 /// Reusable Stitch status chip / pill badge
 class StitchChip extends StatelessWidget {
@@ -31,6 +31,7 @@ class StitchChip extends StatelessWidget {
         fg = AppTheme.stitchWarnText;
         break;
       case StitchChipVariant.danger:
+      case StitchChipVariant.error:
         bg = AppTheme.stitchDangerSoft;
         fg = AppTheme.stitchDangerText;
         break;
@@ -142,7 +143,8 @@ class StitchKpiCard extends StatelessWidget {
       valueColor = AppTheme.stitchSuccessText;
     } else if (statusColor == StitchChipVariant.warn) {
       valueColor = AppTheme.stitchWarnText;
-    } else if (statusColor == StitchChipVariant.danger) {
+    } else if (statusColor == StitchChipVariant.danger ||
+        statusColor == StitchChipVariant.error) {
       valueColor = AppTheme.stitchDangerText;
     } else if (statusColor == StitchChipVariant.info) {
       valueColor = AppTheme.stitchInfoText;

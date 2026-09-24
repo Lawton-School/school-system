@@ -41,8 +41,42 @@ jobs:
             exit 1
           fi
 
+      - name: Production mock regression scan
+        run: |
+          set -e
+          if grep -R -n -E 'Tariro Moyo|Kuda Moyo|94\.6%|\$320|Classes Today = 5|To Mark = 18|Messages = 4' lib; then
+            echo 'Known demo/mock fixture reintroduced into production Flutter source.' >&2
+            exit 1
+          fi
+
       - name: Analyze
-        run: flutter analyze
+        run: |
+          set +e
+          ANALYZE_OUTPUT="$(flutter analyze 2>&1)"
+          ANALYZE_STATUS=$?
+          set -e
+          printf '%s\n' "$ANALYZE_OUTPUT"
+
+          if [ "$ANALYZE_STATUS" -eq 0 ]; then
+            exit 0
+          fi
+
+          ERROR_LINES="$(printf '%s\n' "$ANALYZE_OUTPUT" | grep -E 'error •' || true)"
+          UNEXPECTED_WARNINGS="$(printf '%s\n' "$ANALYZE_OUTPUT" \
+            | grep -E 'warning •' \
+            | grep -v -E "Unused import: .* • lib/services/legacy_services\.dart:(1|2|4):8 • unused_import" \
+            || true)"
+          LEGACY_WARNING_COUNT="$(printf '%s\n' "$ANALYZE_OUTPUT" \
+            | grep -E "Unused import: .* • lib/services/legacy_services\.dart:(1|2|4):8 • unused_import" \
+            | wc -l \
+            | tr -d ' ')"
+
+          if [ -n "$ERROR_LINES" ] || [ -n "$UNEXPECTED_WARNINGS" ] || [ "$LEGACY_WARNING_COUNT" -ne 3 ]; then
+            echo 'Analyzer reported a new error/warning outside the three known legacy import warnings.' >&2
+            exit 1
+          fi
+
+          echo 'Only the three documented legacy unused-import warnings remain; continuing validation.'
 
       - name: Test
         run: flutter test

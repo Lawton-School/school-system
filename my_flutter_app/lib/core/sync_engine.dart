@@ -12,8 +12,6 @@ enum SyncStatus { online, offline, syncing, error }
 
 enum SyncAction { insert, update, delete }
 
-enum ConflictStrategy { serverWins, lastWriteWins }
-
 class SyncQueueEntry {
   final String id;
   final String schoolId;
@@ -35,7 +33,6 @@ class SyncQueueEntry {
     this.lastError,
   });
 
-  /// Create from a Drift-generated [OfflineQueueEntry] row.
   factory SyncQueueEntry.fromRow(OfflineQueueEntry row) {
     return SyncQueueEntry(
       id: row.id,
@@ -51,22 +48,6 @@ class SyncQueueEntry {
       createdAt: row.createdAt,
       retryCount: row.retryCount,
       lastError: row.lastError,
-    );
-  }
-
-  SyncQueueEntry copyWith({
-    int? retryCount,
-    String? lastError,
-  }) {
-    return SyncQueueEntry(
-      id: id,
-      schoolId: schoolId,
-      tableName: tableName,
-      action: action,
-      payload: payload,
-      createdAt: createdAt,
-      retryCount: retryCount ?? this.retryCount,
-      lastError: lastError ?? this.lastError,
     );
   }
 }
@@ -114,6 +95,14 @@ class SyncEngine extends StateNotifier<SyncEngineState> {
 
   static const String _watermarkPrefix = 'sync_watermark_';
 
+  /// Only these mutations have deliberately designed offline semantics today.
+  /// Finance, report-card publication/approval, tenant changes and other
+  /// server-authoritative operations must never be silently queued here.
+  static const Set<String> _offlineSafeTables = {
+    'daily_attendance',
+    'grade_records',
+  };
+
   SyncEngine(this._client, this._prefs, this._db)
       : super(const SyncEngineState()) {
     _loadInitialState();
@@ -124,29 +113,48 @@ class SyncEngine extends StateNotifier<SyncEngineState> {
           ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
         .get();
 
-    final queue = rows.map(SyncQueueEntry.fromRow).toList();
-
-    final watermarkStr = _prefs.getString('${_watermarkPrefix}global');
-    final lastSync =
-        watermarkStr != null ? DateTime.tryParse(watermarkStr) : null;
+    final queue = rows.map(SyncQueueEntry.fromRow).toList(growable: false);
 
     state = state.copyWith(
       pendingQueue: queue,
       pendingCount: queue.length,
-      lastSyncTime: lastSync,
       status: SyncStatus.online,
     );
   }
 
-  /// Enqueue an optimistic mutation (e.g. attendance marked offline, grade entered).
   Future<void> enqueueAction({
     required String schoolId,
     required String tableName,
     required SyncAction action,
     required Map<String, dynamic> payload,
   }) async {
+    if (!_offlineSafeTables.contains(tableName)) {
+      throw StateError(
+        'Offline queue rejected unsafe/server-authoritative table: $tableName',
+      );
+    }
+    if (action == SyncAction.delete) {
+      throw StateError(
+        'Offline delete is not supported for $tableName.',
+      );
+    }
+
+    final payloadSchoolId = payload['school_id']?.toString();
+    if (payloadSchoolId == null || payloadSchoolId != schoolId) {
+      throw StateError(
+        'Offline payload school_id must match the active school.',
+      );
+    }
+
+    final identity = switch (tableName) {
+      'daily_attendance' =>
+        '${payload['student_profile_id'] ?? ''}_${payload['date'] ?? ''}',
+      'grade_records' =>
+        '${payload['assessment_id'] ?? ''}_${payload['student_profile_id'] ?? ''}',
+      _ => '',
+    };
     final id =
-        'queue_${DateTime.now().millisecondsSinceEpoch}_${payload['id'] ?? ''}';
+        'queue_${DateTime.now().microsecondsSinceEpoch}_${tableName}_$identity';
 
     await _db.into(_db.offlineQueueEntries).insert(
           OfflineQueueEntriesCompanion.insert(
@@ -159,31 +167,13 @@ class SyncEngine extends StateNotifier<SyncEngineState> {
           ),
         );
 
-    final rows = await (_db.select(_db.offlineQueueEntries)
-          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
-        .get();
-    final queue = rows.map(SyncQueueEntry.fromRow).toList();
-    state = state.copyWith(pendingQueue: queue, pendingCount: queue.length);
+    await _refreshQueueState();
   }
 
-  /// Resolve conflict strategy based on the target table.
-  ConflictStrategy getConflictStrategy(String tableName) {
-    switch (tableName) {
-      case 'invoices':
-      case 'payments':
-      case 'bursaries':
-      case 'report_cards':
-        return ConflictStrategy.serverWins;
-      case 'daily_attendance':
-      case 'grade_records':
-      case 'profiles':
-      case 'submissions':
-      default:
-        return ConflictStrategy.lastWriteWins;
-    }
-  }
-
-  /// Run full bidirectional delta sync and outbox queue flush.
+  /// Flush only the safe offline outbox entries for one school.
+  ///
+  /// This is intentionally not described as a bidirectional sync engine: the
+  /// current implementation is an outbox flush plus separate read caches.
   Future<void> syncAll(String schoolId) async {
     if (state.status == SyncStatus.syncing) return;
 
@@ -192,59 +182,85 @@ class SyncEngine extends StateNotifier<SyncEngineState> {
     try {
       int flushed = 0;
       final rows = await (_db.select(_db.offlineQueueEntries)
+            ..where((t) => t.schoolId.equals(schoolId))
             ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
           .get();
 
       for (final row in rows) {
         try {
-          final payload =
-              Map<String, dynamic>.from(jsonDecode(row.payload) as Map);
-
-          if (row.action == SyncAction.insert.name ||
-              row.action == SyncAction.update.name) {
-            await _client.from(row.targetTable).upsert(payload);
-          } else if (row.action == SyncAction.delete.name) {
-            if (payload['id'] != null) {
-              await _client.from(row.targetTable).update({
-                'deleted_at': DateTime.now().toIso8601String(),
-              }).eq('id', payload['id']);
-            }
+          if (!_offlineSafeTables.contains(row.targetTable)) {
+            throw StateError(
+              'Queued table ${row.targetTable} is no longer offline-safe.',
+            );
           }
 
-          // Success — remove from queue
+          final payload =
+              Map<String, dynamic>.from(jsonDecode(row.payload) as Map);
+          if (payload['school_id']?.toString() != schoolId) {
+            throw StateError('Queued payload school mismatch.');
+          }
+
+          if (row.action != SyncAction.insert.name &&
+              row.action != SyncAction.update.name) {
+            throw StateError(
+              'Unsupported queued action ${row.action} for ${row.targetTable}.',
+            );
+          }
+
+          switch (row.targetTable) {
+            case 'daily_attendance':
+              await _client.from('daily_attendance').upsert(
+                    payload,
+                    onConflict: 'student_profile_id,date',
+                  );
+            case 'grade_records':
+              await _client.from('grade_records').upsert(
+                    payload,
+                    onConflict: 'assessment_id,student_profile_id',
+                  );
+          }
+
           await (_db.delete(_db.offlineQueueEntries)
                 ..where((t) => t.id.equals(row.id)))
               .go();
           flushed++;
         } catch (e) {
           debugPrint('Sync failed for entry ${row.id}: $e');
-          // Increment retry count & record error
           await (_db.update(_db.offlineQueueEntries)
                 ..where((t) => t.id.equals(row.id)))
-              .write(OfflineQueueEntriesCompanion(
-            retryCount: Value(row.retryCount + 1),
-            lastError: Value(e.toString()),
-          ));
+              .write(
+            OfflineQueueEntriesCompanion(
+              retryCount: Value(row.retryCount + 1),
+              lastError: Value(e.toString()),
+            ),
+          );
         }
       }
 
-      // Re-read remaining queue
-      final remaining = await (_db.select(_db.offlineQueueEntries)
+      final activeSchoolRemaining = await (_db.select(_db.offlineQueueEntries)
+            ..where((t) => t.schoolId.equals(schoolId)))
+          .get();
+      final allRemaining = await (_db.select(_db.offlineQueueEntries)
             ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
           .get();
 
-      // Update watermark
       final now = DateTime.now();
-      await _prefs.setString('${_watermarkPrefix}global', now.toIso8601String());
+      await _prefs.setString(
+        '$_watermarkPrefix$schoolId',
+        now.toIso8601String(),
+      );
 
       state = state.copyWith(
-        status: remaining.isEmpty ? SyncStatus.online : SyncStatus.error,
+        status: activeSchoolRemaining.isEmpty
+            ? SyncStatus.online
+            : SyncStatus.error,
         lastSyncTime: now,
         syncedCount: state.syncedCount + flushed,
-        pendingQueue: remaining.map(SyncQueueEntry.fromRow).toList(),
-        pendingCount: remaining.length,
-        errorMessage: remaining.isNotEmpty
-            ? '${remaining.length} item(s) failed to sync'
+        pendingQueue:
+            allRemaining.map(SyncQueueEntry.fromRow).toList(growable: false),
+        pendingCount: allRemaining.length,
+        errorMessage: activeSchoolRemaining.isNotEmpty
+            ? '${activeSchoolRemaining.length} item(s) failed to sync for the active school'
             : null,
       );
     } catch (e) {
@@ -255,7 +271,19 @@ class SyncEngine extends StateNotifier<SyncEngineState> {
     }
   }
 
-  /// Manually toggle simulated offline mode for testing.
+  Future<void> _refreshQueueState() async {
+    final rows = await (_db.select(_db.offlineQueueEntries)
+          ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+        .get();
+    final queue = rows.map(SyncQueueEntry.fromRow).toList(growable: false);
+    state = state.copyWith(
+      pendingQueue: queue,
+      pendingCount: queue.length,
+    );
+  }
+
+  /// Manual offline simulation retained for diagnostics/tests. Real network
+  /// connectivity detection is still a separate platform-level task.
   void toggleOfflineMode() {
     if (state.status == SyncStatus.offline) {
       state = state.copyWith(status: SyncStatus.online);
