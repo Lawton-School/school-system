@@ -1,21 +1,17 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Central typed client for all authoritative PostgreSQL RPC functions
-/// exposed by the ZivoConnect EMS backend.
+/// Central typed client for authoritative PostgreSQL RPC functions exposed by
+/// the ZivoConnect EMS backend.
+///
+/// RPC parameter names intentionally mirror the PostgreSQL signatures exactly.
 class RpcClient {
   final SupabaseClient _client;
 
   RpcClient(this._client);
 
-  // ─────────────────────────────────────────────────────────────────
-  // 1. ACTIVITY HEARTBEAT & PLATFORM ENGAGEMENT
-  // ─────────────────────────────────────────────────────────────────
-
   DateTime? _lastHeartbeatTime;
 
-  /// Throttled heartbeat to update `last_active_at` on the active profile.
-  /// Enforces a 30-minute throttle to prevent redundant writes.
   Future<void> touchActiveProfile({bool force = false}) async {
     final now = DateTime.now();
     if (!force &&
@@ -38,335 +34,324 @@ class RpcClient {
                           : 'other';
 
       await _client.rpc('touch_active_profile', params: {
-        'platform': platform,
-        'app_version': '1.0.0',
+        'p_platform': platform,
+        'p_app_version': '1.0.0',
       });
       _lastHeartbeatTime = now;
-      debugPrint('[RpcClient] touch_active_profile succeeded');
     } catch (e) {
       debugPrint('[RpcClient] touch_active_profile error: $e');
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // 2. SCHOOL ADMIN & STUDENTS DIRECTORY
-  // ─────────────────────────────────────────────────────────────────
-
-  /// Screen 01: School Admin Command Center KPIs
   Future<Map<String, dynamic>> getSchoolAdminDashboardMetrics() async {
-    final res = await _client.rpc('get_school_admin_dashboard_metrics');
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('get_school_admin_dashboard_metrics'));
   }
 
-  /// Screen 02: Full 360 summary for a student profile
-  Future<Map<String, dynamic>> getStudent360Summary(String studentProfileId) async {
-    final res = await _client.rpc('get_student_360_summary', params: {
-      'student_profile_id': studentProfileId,
-    });
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+  Future<Map<String, dynamic>> getStudent360Summary(
+    String studentProfileId,
+  ) async {
+    return _asMap(await _client.rpc('get_student_360_summary', params: {
+      'p_student_profile_id': studentProfileId,
+    }));
   }
 
-  /// Screen 24: Students directory with academic, attendance, and fee state
-  Future<List<Map<String, dynamic>>> getStudentsDirectory({String? academicYearId}) async {
-    final params = <String, dynamic>{};
-    if (academicYearId != null) params['academic_year_id'] = academicYearId;
-    final res = await _client.rpc('get_students_directory', params: params);
-    if (res is List) {
-      return res.map((item) => Map<String, dynamic>.from(item as Map)).toList();
-    }
-    return [];
+  Future<List<Map<String, dynamic>>> getStudentsDirectory({
+    String? academicYearId,
+  }) async {
+    final yearId = _requiredId(academicYearId, 'academicYearId');
+    final payload = _asMap(await _client.rpc('get_students_directory', params: {
+      'p_academic_year_id': yearId,
+    }));
+    return _mapList(payload['students']);
   }
 
-  /// Screen 25: Classes and sections overview with enrolled count & teachers
-  Future<List<Map<String, dynamic>>> getClassesSectionsOverview({String? academicYearId}) async {
-    final params = <String, dynamic>{};
-    if (academicYearId != null) params['academic_year_id'] = academicYearId;
-    final res = await _client.rpc('get_classes_sections_overview', params: params);
-    if (res is List) {
-      return res.map((item) => Map<String, dynamic>.from(item as Map)).toList();
-    }
-    return [];
+  Future<List<Map<String, dynamic>>> getClassesSectionsOverview({
+    String? academicYearId,
+  }) async {
+    final yearId = _requiredId(academicYearId, 'academicYearId');
+    final payload =
+        _asMap(await _client.rpc('get_classes_sections_overview', params: {
+      'p_academic_year_id': yearId,
+    }));
+    return _mapList(payload['classes']);
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // 3. TEACHER DASHBOARD, ATTENDANCE & GRADEBOOK
-  // ─────────────────────────────────────────────────────────────────
-
-  /// Screen 03: Teacher Dashboard Metrics & Schedule
   Future<Map<String, dynamic>> getTeacherDashboardMetrics() async {
-    final res = await _client.rpc('get_teacher_dashboard_metrics');
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('get_teacher_dashboard_metrics'));
   }
 
-  /// Screen 04: Attendance roll call roster for a class section & date
   Future<Map<String, dynamic>> getAttendanceRollCall({
     required String classSectionId,
     required DateTime date,
   }) async {
-    final res = await _client.rpc('get_attendance_roll_call', params: {
-      'class_section_id': classSectionId,
-      'date': date.toIso8601String().split('T')[0],
-    });
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('get_attendance_roll_call', params: {
+      'p_class_section_id': classSectionId,
+      'p_date': _date(date),
+    }));
   }
 
-  /// Screen 05: Authoritative teacher gradebook matrix
   Future<Map<String, dynamic>> getTeacherGradebook({
     required String classSectionId,
     required String subjectId,
     required String termId,
   }) async {
-    final res = await _client.rpc('get_teacher_gradebook', params: {
-      'class_section_id': classSectionId,
-      'subject_id': subjectId,
-      'term_id': termId,
-    });
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('get_teacher_gradebook', params: {
+      'p_class_section_id': classSectionId,
+      'p_subject_id': subjectId,
+      'p_term_id': termId,
+    }));
   }
 
-  /// Screen 26: Gradebook setup and weight validation
   Future<Map<String, dynamic>> getGradebookSetup({
     required String classSectionId,
     required String subjectId,
     required String termId,
   }) async {
-    final res = await _client.rpc('get_gradebook_setup', params: {
-      'class_section_id': classSectionId,
-      'subject_id': subjectId,
-      'term_id': termId,
-    });
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('get_gradebook_setup', params: {
+      'p_class_section_id': classSectionId,
+      'p_subject_id': subjectId,
+      'p_term_id': termId,
+    }));
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // 4. REPORT CARDS LIFECYCLE
-  // ─────────────────────────────────────────────────────────────────
-
-  /// Calculate preview report card for student
   Future<Map<String, dynamic>> calculateStudentTermReport({
     required String studentProfileId,
     required String termId,
   }) async {
-    final res = await _client.rpc('calculate_student_term_report', params: {
-      'student_profile_id': studentProfileId,
-      'term_id': termId,
-    });
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('calculate_student_term_report', params: {
+      'p_student_profile_id': studentProfileId,
+      'p_term_id': termId,
+    }));
   }
 
-  /// Persist generated student report card
   Future<Map<String, dynamic>> generateStudentReportCard({
     required String studentProfileId,
     required String termId,
   }) async {
-    final res = await _client.rpc('generate_student_report_card', params: {
-      'student_profile_id': studentProfileId,
-      'term_id': termId,
-    });
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('generate_student_report_card', params: {
+      'p_student_profile_id': studentProfileId,
+      'p_term_id': termId,
+    }));
   }
 
-  /// Screen 27: Report cards overview for review/publishing
   Future<List<Map<String, dynamic>>> getReportCardsOverview({
     String? academicYearId,
     String? termId,
     String? classSectionId,
   }) async {
-    final params = <String, dynamic>{};
-    if (academicYearId != null) params['academic_year_id'] = academicYearId;
-    if (termId != null) params['term_id'] = termId;
-    if (classSectionId != null) params['class_section_id'] = classSectionId;
-
-    final res = await _client.rpc('get_report_cards_overview', params: params);
-    if (res is List) {
-      return res.map((item) => Map<String, dynamic>.from(item as Map)).toList();
-    }
-    return [];
+    final yearId = _requiredId(academicYearId, 'academicYearId');
+    final resolvedTermId = _requiredId(termId, 'termId');
+    final sectionId = _requiredId(classSectionId, 'classSectionId');
+    final payload = _asMap(await _client.rpc(
+      'get_report_cards_overview',
+      params: {
+        'p_academic_year_id': yearId,
+        'p_term_id': resolvedTermId,
+        'p_class_section_id': sectionId,
+      },
+    ));
+    return _mapList(payload['students']);
   }
 
-  /// Set status: draft, pending_approval, approved, published
   Future<void> setReportCardStatus({
     required String reportCardId,
     required String status,
   }) async {
     await _client.rpc('set_report_card_status', params: {
-      'report_card_id': reportCardId,
-      'status': status,
+      'p_report_card_id': reportCardId,
+      'p_status': status,
     });
   }
 
-  /// Bulk publish report cards for a section/term
   Future<int> bulkPublishReportCards({
     required String academicYearId,
     required String termId,
     String? classSectionId,
   }) async {
-    final params = <String, dynamic>{
-      'academic_year_id': academicYearId,
-      'term_id': termId,
-    };
-    if (classSectionId != null) params['class_section_id'] = classSectionId;
-    final res = await _client.rpc('bulk_publish_report_cards', params: params);
+    final sectionId = _requiredId(classSectionId, 'classSectionId');
+    final res = await _client.rpc('bulk_publish_report_cards', params: {
+      'p_academic_year_id': academicYearId,
+      'p_term_id': termId,
+      'p_class_section_id': sectionId,
+    });
     return (res as num?)?.toInt() ?? 0;
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // 5. PARENT EXPERIENCE
-  // ─────────────────────────────────────────────────────────────────
-
-  /// Screen 06: Comprehensive dashboard for a selected child
-  Future<Map<String, dynamic>> getParentDashboard(String studentProfileId) async {
-    final res = await _client.rpc('get_parent_dashboard', params: {
-      'student_profile_id': studentProfileId,
-    });
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+  Future<Map<String, dynamic>> getParentDashboard(
+    String studentProfileId,
+  ) async {
+    return _asMap(await _client.rpc('get_parent_dashboard', params: {
+      'p_student_profile_id': studentProfileId,
+    }));
   }
 
-  /// Lightweight child summary
-  Future<Map<String, dynamic>> getParentChildSummary(String studentProfileId) async {
-    final res = await _client.rpc('get_parent_child_summary', params: {
-      'student_profile_id': studentProfileId,
-    });
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+  Future<Map<String, dynamic>> getParentChildSummary(
+    String studentProfileId,
+  ) async {
+    return _asMap(await _client.rpc('get_parent_child_summary', params: {
+      'p_student_profile_id': studentProfileId,
+    }));
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // 6. FINANCE DASHBOARD & RECONCILIATION
-  // ─────────────────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> getParentAcademics({
+    required String studentProfileId,
+    String? termId,
+  }) async {
+    return _asMap(await _client.rpc('get_parent_academics', params: {
+      'p_student_profile_id': studentProfileId,
+      'p_term_id': termId,
+    }));
+  }
 
-  /// Screen 12: School Finance Dashboard Metrics
+  Future<Map<String, dynamic>> getParentFees({
+    required String studentProfileId,
+    String? academicYearId,
+    String? termId,
+  }) async {
+    return _asMap(await _client.rpc('get_parent_fees', params: {
+      'p_student_profile_id': studentProfileId,
+      'p_academic_year_id': academicYearId,
+      'p_term_id': termId,
+    }));
+  }
+
   Future<Map<String, dynamic>> getFinanceDashboardMetrics() async {
-    final res = await _client.rpc('get_finance_dashboard_metrics');
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('get_finance_dashboard_metrics'));
   }
 
-  /// Screen 14: Unmatched payment reconciliation against invoice
   Future<Map<String, dynamic>> reconcilePaymentToInvoice({
     required String paymentId,
     required String invoiceId,
   }) async {
-    final res = await _client.rpc('reconcile_payment_to_invoice', params: {
-      'payment_id': paymentId,
-      'invoice_id': invoiceId,
-    });
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('reconcile_payment_to_invoice', params: {
+      'p_payment_id': paymentId,
+      'p_invoice_id': invoiceId,
+    }));
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // 7. REPORTS & ANALYTICS
-  // ─────────────────────────────────────────────────────────────────
+  Future<Map<String, dynamic>> generateInvoicesFromFeeStructure({
+    required String feeStructureId,
+    DateTime? dueDate,
+    bool includeOptional = false,
+  }) async {
+    return _asMap(await _client.rpc(
+      'generate_invoices_from_fee_structure',
+      params: {
+        'p_fee_structure_id': feeStructureId,
+        'p_due_date': dueDate == null ? null : _date(dueDate),
+        'p_include_optional': includeOptional,
+      },
+    ));
+  }
 
-  /// Screen 22 Tab 1: Attendance Report
   Future<Map<String, dynamic>> getAttendanceReport({
     required String academicYearId,
     String? termId,
     String? classSectionId,
   }) async {
-    final params = <String, dynamic>{'academic_year_id': academicYearId};
-    if (termId != null) params['term_id'] = termId;
-    if (classSectionId != null) params['class_section_id'] = classSectionId;
-
-    final res = await _client.rpc('get_attendance_report', params: params);
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('get_attendance_report', params: {
+      'p_academic_year_id': academicYearId,
+      'p_term_id': termId,
+      'p_class_section_id': classSectionId,
+    }));
   }
 
-  /// Screen 22 Tab 2: Academic Performance Report
   Future<Map<String, dynamic>> getAcademicPerformanceReport({
     required String academicYearId,
     String? termId,
     String? classSectionId,
   }) async {
-    final params = <String, dynamic>{'academic_year_id': academicYearId};
-    if (termId != null) params['term_id'] = termId;
-    if (classSectionId != null) params['class_section_id'] = classSectionId;
-
-    final res = await _client.rpc('get_academic_performance_report', params: params);
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(
+        await _client.rpc('get_academic_performance_report', params: {
+      'p_academic_year_id': academicYearId,
+      'p_term_id': termId,
+      'p_class_section_id': classSectionId,
+    }));
   }
 
-  /// Screen 22 Tab 3: Fee Collections Report
+  /// Date-window fee report. Uses the unambiguous wrapper RPC rather than the
+  /// overloaded PostgreSQL function name.
   Future<Map<String, dynamic>> getFeeCollectionsReport({
     required String academicYearId,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
-    final params = <String, dynamic>{'academic_year_id': academicYearId};
-    if (startDate != null) params['start_date'] = startDate.toIso8601String().split('T')[0];
-    if (endDate != null) params['end_date'] = endDate.toIso8601String().split('T')[0];
-
-    final res = await _client.rpc('get_fee_collections_report', params: params);
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc(
+      'get_fee_collections_report_by_date',
+      params: {
+        'p_academic_year_id': academicYearId,
+        'p_start_date': startDate == null ? null : _date(startDate),
+        'p_end_date': endDate == null ? null : _date(endDate),
+      },
+    ));
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // 8. OPERATIONS DASHBOARDS
-  // ─────────────────────────────────────────────────────────────────
+  /// Academic-scope fee report for Reports & Analytics.
+  Future<Map<String, dynamic>> getFeeCollectionsReportByScope({
+    required String academicYearId,
+    String? termId,
+    String? classSectionId,
+  }) async {
+    return _asMap(await _client.rpc(
+      'get_fee_collections_report_by_scope',
+      params: {
+        'p_academic_year_id': academicYearId,
+        'p_term_id': termId,
+        'p_class_section_id': classSectionId,
+      },
+    ));
+  }
 
-  /// Screen 15: Admissions pipeline
   Future<Map<String, dynamic>> getAdmissionsPipeline() async {
-    final res = await _client.rpc('get_admissions_pipeline');
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('get_admissions_pipeline'));
   }
 
-  /// Screen 18: Fleet & bus tracking dashboard
   Future<Map<String, dynamic>> getFleetDashboard() async {
-    final res = await _client.rpc('get_fleet_dashboard');
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('get_fleet_dashboard'));
   }
 
-  /// Screen 20: Library management dashboard
   Future<Map<String, dynamic>> getLibraryDashboard() async {
-    final res = await _client.rpc('get_library_dashboard');
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('get_library_dashboard'));
   }
 
-  /// Screen 21: Behaviour & pastoral support dashboard
   Future<Map<String, dynamic>> getBehaviorDashboard() async {
-    final res = await _client.rpc('get_behavior_dashboard');
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('get_behavior_dashboard'));
   }
 
-  // ─────────────────────────────────────────────────────────────────
-  // 9. SUPER ADMIN & NOTIFICATIONS
-  // ─────────────────────────────────────────────────────────────────
-
-  /// Screen 10: Super admin platform metrics (active schools, MAU, etc.)
   Future<Map<String, dynamic>> getSuperAdminPlatformMetrics() async {
-    final res = await _client.rpc('get_super_admin_platform_metrics');
-    if (res is Map) return Map<String, dynamic>.from(res);
-    return {};
+    return _asMap(await _client.rpc('get_super_admin_platform_metrics'));
   }
 
-  /// Screen 11: Super admin schools directory
   Future<List<Map<String, dynamic>>> getSuperAdminSchoolsDirectory() async {
-    final res = await _client.rpc('get_super_admin_schools_directory');
-    if (res is List) {
-      return res.map((item) => Map<String, dynamic>.from(item as Map)).toList();
-    }
-    return [];
+    final payload =
+        _asMap(await _client.rpc('get_super_admin_schools_directory'));
+    return _mapList(payload['schools']);
   }
 
-  /// Screen 17: Mark all notifications as read for current profile
   Future<void> markAllNotificationsRead() async {
     await _client.rpc('mark_all_notifications_read');
   }
+
+  static Map<String, dynamic> _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    return <String, dynamic>{};
+  }
+
+  static List<Map<String, dynamic>> _mapList(dynamic value) {
+    if (value is! List) return <Map<String, dynamic>>[];
+    return value
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+  }
+
+  static String _requiredId(String? value, String name) {
+    if (value == null || value.trim().isEmpty) {
+      throw ArgumentError('$name is required by the backend RPC contract.');
+    }
+    return value;
+  }
+
+  static String _date(DateTime value) => value.toIso8601String().split('T')[0];
 }
