@@ -117,9 +117,9 @@ class MessagingRepository {
     } catch(e){debugPrint('[MessagingRepository] requestParentTeacherMeeting error: $e');return null;}
   }
 
-  Future<bool> respondParentTeacherMeeting({required String meetingId,required String status,DateTime? scheduledAt,String? locationOrLink}) async {
+  Future<bool> respondParentTeacherMeeting({required String meetingId,required String status,DateTime? scheduledAt,String? locationOrLink,String? notes}) async {
     try {
-      await _client.rpc('respond_parent_teacher_meeting',params:{'p_meeting':meetingId,'p_status':status,'p_scheduled_at':scheduledAt?.toUtc().toIso8601String(),'p_location_or_link':locationOrLink});
+      await _client.rpc('respond_parent_teacher_meeting',params:{'p_meeting':meetingId,'p_status':status,'p_scheduled_at':scheduledAt?.toUtc().toIso8601String(),'p_location_or_link':locationOrLink,'p_notes':notes});
       return true;
     } catch(e){debugPrint('[MessagingRepository] respondParentTeacherMeeting error: $e');return false;}
   }
