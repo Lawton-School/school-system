@@ -377,6 +377,8 @@ String _dashboardForRole(String role) {
       return AppRoutes.schoolAdminFinance;
     case AppRoles.registrar:
       return AppRoutes.schoolAdminAdmissions;
+    case AppRoles.reception:
+      return AppRoutes.schoolAdminAdmissions;
     default:
       return AppRoutes.profilePicker;
   }
