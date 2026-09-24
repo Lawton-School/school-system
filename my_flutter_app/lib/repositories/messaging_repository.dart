@@ -105,6 +105,45 @@ class MessagingRepository {
     }
   }
 
+  Future<List<Map<String, dynamic>>> fetchStudentConcerns() async {
+    final response = await _client.rpc('get_student_concerns');
+    return ((response as List<dynamic>?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList(growable: false);
+  }
+
+  Future<String?> createStudentConcern({
+    required String parentProfileId,
+    required String studentProfileId,
+    required String kind,
+    required String title,
+    required String details,
+    String? subjectId,
+  }) async {
+    try {
+      final response = await _client.rpc('create_student_concern', params: {
+        'p_parent': parentProfileId,
+        'p_student': studentProfileId,
+        'p_kind': kind,
+        'p_title': title.trim(),
+        'p_details': details.trim(),
+        'p_subject': subjectId,
+      });
+      return response?.toString();
+    } catch (e) {
+      debugPrint('[MessagingRepository] createStudentConcern error: $e');
+      return null;
+    }
+  }
+
+  Future<bool> acknowledgeStudentConcern(String concernId) async {
+    try {
+      await _client.rpc('acknowledge_student_concern', params: {'p_concern': concernId});
+      return true;
+    } catch (e) {
+      debugPrint('[MessagingRepository] acknowledgeStudentConcern error: $e');
+      return false;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> fetchTeacherParentContacts() async {
     try {
       final response = await _client.rpc('get_teacher_parent_contacts');
