@@ -10,7 +10,7 @@ max_rows = 1000
 
 [db]
 port = 54322
-major_version = 15
+major_version = 17
 
 [studio]
 port = 54323
@@ -25,3 +25,9 @@ enable_signup = true
 [auth.email]
 enable_confirmations = false
 enable_signup = true
+
+[functions.ai-chat-proxy]
+verify_jwt = true
+
+[functions.switch-profile]
+verify_jwt = true
