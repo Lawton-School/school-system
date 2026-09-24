@@ -14,8 +14,9 @@ class FinanceRepository {
   FinanceRepository({
     required SupabaseClient client,
     required RpcClient rpc,
-  })  : _client = client,
-        _rpc = rpc;
+  }) : this._(client, rpc);
+
+  FinanceRepository._(this._client, this._rpc);
 
   Future<List<Map<String, dynamic>>> fetchInvoices() async {
     final raw = await _client
