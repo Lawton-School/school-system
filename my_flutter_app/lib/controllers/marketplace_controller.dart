@@ -8,6 +8,17 @@ final marketplaceRepositoryProvider = Provider<MarketplaceRepository>((ref) {
   return MarketplaceRepository(client);
 });
 
+final marketplaceCurrencyProvider =
+    FutureProvider.autoDispose.family<String, String>((ref, schoolId) async {
+  final client = ref.watch(supabaseClientProvider);
+  final row = await client
+      .from('schools')
+      .select('default_currency')
+      .eq('id', schoolId)
+      .single();
+  return row['default_currency']?.toString().toUpperCase() ?? 'USD';
+});
+
 /// Thin application controller for Marketplace mutations.
 /// Keeps widgets free from direct order writes and enforces use of the
 /// server-authoritative Marketplace RPCs.
