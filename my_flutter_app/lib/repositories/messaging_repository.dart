@@ -105,6 +105,25 @@ class MessagingRepository {
     }
   }
 
+  Future<List<Map<String, dynamic>>> fetchParentTeacherMeetings() async {
+    final response=await _client.rpc('get_parent_teacher_meetings');
+    return ((response as List<dynamic>?)??const []).map((e)=>Map<String,dynamic>.from(e as Map)).toList(growable:false);
+  }
+
+  Future<String?> requestParentTeacherMeeting({required String counterpartProfileId,required String studentProfileId,required DateTime scheduledAt,required String reason,String? subjectId,String mode='in_person'}) async {
+    try {
+      final r=await _client.rpc('request_parent_teacher_meeting',params:{'p_counterpart':counterpartProfileId,'p_student':studentProfileId,'p_scheduled_at':scheduledAt.toUtc().toIso8601String(),'p_reason':reason.trim(),'p_subject':subjectId,'p_mode':mode});
+      return r?.toString();
+    } catch(e){debugPrint('[MessagingRepository] requestParentTeacherMeeting error: $e');return null;}
+  }
+
+  Future<bool> respondParentTeacherMeeting({required String meetingId,required String status,DateTime? scheduledAt,String? locationOrLink}) async {
+    try {
+      await _client.rpc('respond_parent_teacher_meeting',params:{'p_meeting':meetingId,'p_status':status,'p_scheduled_at':scheduledAt?.toUtc().toIso8601String(),'p_location_or_link':locationOrLink});
+      return true;
+    } catch(e){debugPrint('[MessagingRepository] respondParentTeacherMeeting error: $e');return false;}
+  }
+
   Future<List<Map<String, dynamic>>> fetchStudentConcerns() async {
     final response = await _client.rpc('get_student_concerns');
     return ((response as List<dynamic>?) ?? const []).map((e) => Map<String, dynamic>.from(e as Map)).toList(growable: false);
