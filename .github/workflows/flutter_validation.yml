@@ -33,6 +33,14 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Security scan client source
+        run: |
+          set -e
+          if grep -R -n -E 'openrouter\.ai|OPENROUTER_API_KEY|openRouterApiKey|SUPABASE_SERVICE_ROLE|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY' lib; then
+            echo 'High-risk server credential/provider reference found in Flutter client source.' >&2
+            exit 1
+          fi
+
       - name: Analyze
         run: flutter analyze
 
