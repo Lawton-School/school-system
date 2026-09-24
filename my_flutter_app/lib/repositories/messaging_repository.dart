@@ -105,6 +105,49 @@ class MessagingRepository {
     }
   }
 
+  Future<List<Map<String, dynamic>>> fetchTeacherParentContacts() async {
+    try {
+      final response = await _client.rpc('get_teacher_parent_contacts');
+      return ((response as List<dynamic>?) ?? const [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(growable: false);
+    } catch (e) {
+      debugPrint('[MessagingRepository] fetchTeacherParentContacts error: $e');
+      return [];
+    }
+  }
+
+  Future<DirectMessageItem?> sendTeacherParentMessage({
+    required String recipientProfileId,
+    required String studentProfileId,
+    required String messageText,
+    String? subjectId,
+  }) async {
+    final myProfileId = _getActiveProfileId();
+    if (myProfileId == null) return null;
+    final trimmed = messageText.trim();
+    if (trimmed.isEmpty) return null;
+    try {
+      final id = await _client.rpc('send_teacher_parent_message', params: {
+        'p_recipient': recipientProfileId,
+        'p_student': studentProfileId,
+        'p_message': trimmed,
+        'p_subject': subjectId,
+      });
+      final response = await _client.from('direct_messages').select(
+        '*, sender:profiles!direct_messages_sender_profile_id_fkey(id, first_name, last_name, role)',
+      ).eq('id', id).single();
+      final map = Map<String, dynamic>.from(response);
+      _normalizeSender(map);
+      final item = DirectMessageItem.fromMap(map, myProfileId);
+      _receivedMessageIds.add(item.id);
+      return item;
+    } catch (e) {
+      debugPrint('[MessagingRepository] sendTeacherParentMessage error: $e');
+      return null;
+    }
+  }
+
   Future<List<DirectMessageItem>> fetchThread(String otherProfileId) async {
     final myProfileId = _getActiveProfileId();
     if (myProfileId == null || myProfileId.isEmpty) return [];
