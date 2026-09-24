@@ -41,6 +41,14 @@ jobs:
             exit 1
           fi
 
+      - name: Production mock regression scan
+        run: |
+          set -e
+          if grep -R -n -E 'Tariro Moyo|Kuda Moyo|94\.6%|\$320|Classes Today = 5|To Mark = 18|Messages = 4' lib; then
+            echo 'Known demo/mock fixture reintroduced into production Flutter source.' >&2
+            exit 1
+          fi
+
       - name: Analyze
         run: |
           set +e
