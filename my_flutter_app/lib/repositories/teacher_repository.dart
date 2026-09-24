@@ -6,8 +6,8 @@ import '../models/models.dart';
 import '../services/rpc_client.dart';
 
 /// Clean Architecture Repository for Teacher operations.
-/// All queries flow through authoritative Supabase RPCs, with
-/// optimistic offline mutation queuing backed by Drift AppDatabase.
+/// All reads flow through authoritative Supabase RPCs, while safe teacher
+/// mutations may be queued in Drift when the network write fails.
 class TeacherRepository {
   final SupabaseClient _client;
   final RpcClient _rpc;
@@ -23,33 +23,68 @@ class TeacherRepository {
 
   AppDatabase get database => _db;
 
-  /// Screen 03: Live Teacher Dashboard Metrics & Schedule
   Future<TeacherDashboardMetrics> fetchDashboardMetrics() async {
     try {
       final res = await _rpc.getTeacherDashboardMetrics();
-      if (res.isNotEmpty) {
-        return TeacherDashboardMetrics.fromMap(res);
+      if (res.isEmpty) return const TeacherDashboardMetrics();
+
+      // The frozen Teacher dashboard model predates the production RPC field
+      // names. Normalize only verified schedule keys here instead of teaching
+      // widgets about database-specific JSON shapes.
+      final normalized = Map<String, dynamic>.from(res);
+      final rawSchedule = res['schedule'];
+      if (rawSchedule is List) {
+        normalized['schedule'] = rawSchedule.whereType<Map>().map((raw) {
+          final item = Map<String, dynamic>.from(raw);
+          final start = item['start_time']?.toString() ?? '';
+          final className = item['class_name']?.toString().trim() ?? '';
+          final sectionName = item['section_name']?.toString().trim() ?? '';
+          final rawStatus = item['status']?.toString() ?? 'upcoming';
+
+          final classSectionName = [className, sectionName]
+              .where((part) => part.isNotEmpty)
+              .join(' · ');
+          final statusVariant = switch (rawStatus) {
+            'completed' => 'success',
+            'next' || 'in_progress' => 'primary',
+            _ => 'neutral',
+          };
+          final displayStatus = switch (rawStatus) {
+            'in_progress' => 'In progress',
+            'completed' => 'Completed',
+            'next' => 'Next',
+            'upcoming' => 'Upcoming',
+            _ => rawStatus,
+          };
+
+          return <String, dynamic>{
+            ...item,
+            'time': start.length >= 5 ? start.substring(0, 5) : start,
+            'class_section_name': classSectionName,
+            'students': item['student_count'],
+            'status': displayStatus,
+            'status_variant': statusVariant,
+          };
+        }).toList(growable: false);
       }
+
+      return TeacherDashboardMetrics.fromMap(normalized);
     } catch (e) {
       debugPrint('[TeacherRepository] fetchDashboardMetrics error: $e');
     }
-    // Return empty metrics if no data from backend
     return const TeacherDashboardMetrics();
   }
 
-  /// Screen 04: Live Attendance Roll Call roster for date and class section
   Future<Map<String, dynamic>> fetchAttendanceRollCall({
     required String classSectionId,
     required DateTime date,
-  }) async {
-    return await _rpc.getAttendanceRollCall(
+  }) {
+    return _rpc.getAttendanceRollCall(
       classSectionId: classSectionId,
       date: date,
     );
   }
 
-  /// Screen 04: Submit or Queue Attendance Roll Call
-  /// Enforces offline durability via Drift queue when offline.
   Future<void> submitAttendanceRollCall({
     required String schoolId,
     required String classSectionId,
@@ -57,59 +92,56 @@ class TeacherRepository {
     required List<Map<String, dynamic>> records,
   }) async {
     final dateStr = date.toIso8601String().split('T')[0];
-
-    try {
-      // Try live upsert to Supabase daily_attendance table
-      final rows = records.map((r) => {
+    final rows = records.map((record) {
+      // Accept the previous UI key temporarily, but never send it to Supabase.
+      final studentProfileId =
+          record['student_profile_id'] ?? record['student_id'];
+      if (studentProfileId == null || studentProfileId.toString().isEmpty) {
+        throw ArgumentError('Attendance record requires student_profile_id.');
+      }
+      return <String, dynamic>{
         'school_id': schoolId,
         'class_section_id': classSectionId,
-        'student_id': r['student_id'],
+        'student_profile_id': studentProfileId,
         'date': dateStr,
-        'status': r['status'],
-        'remarks': r['remarks'],
-      }).toList();
+        'status': record['status'],
+        'remarks': record['remarks'],
+      };
+    }).toList(growable: false);
 
+    try {
       await _client.from('daily_attendance').upsert(
         rows,
-        onConflict: 'school_id,class_section_id,student_id,date',
+        onConflict: 'student_profile_id,date',
       );
       debugPrint('[TeacherRepository] Attendance submitted live to Supabase');
     } catch (e) {
-      debugPrint('[TeacherRepository] Network error, enqueueing attendance in Drift: $e');
-      // Queue mutation into Drift OfflineQueueEntries
-      for (final r in records) {
+      debugPrint(
+        '[TeacherRepository] Attendance write failed; queueing safe mutation: $e',
+      );
+      for (final row in rows) {
         await _syncEngine.enqueueAction(
           schoolId: schoolId,
           tableName: 'daily_attendance',
           action: SyncAction.insert,
-          payload: {
-            'school_id': schoolId,
-            'class_section_id': classSectionId,
-            'student_id': r['student_id'],
-            'date': dateStr,
-            'status': r['status'],
-            'remarks': r['remarks'],
-          },
+          payload: row,
         );
       }
     }
   }
 
-  /// Screen 05: Authoritative Teacher Gradebook Matrix
   Future<Map<String, dynamic>> fetchGradebook({
     required String classSectionId,
     required String subjectId,
     required String termId,
-  }) async {
-    return await _rpc.getTeacherGradebook(
+  }) {
+    return _rpc.getTeacherGradebook(
       classSectionId: classSectionId,
       subjectId: subjectId,
       termId: termId,
     );
   }
 
-  /// Screen 05: Update student grade record
-  /// Enforces: 0 <= score <= max_points locally, while PostgreSQL remains authoritative.
   Future<void> saveGradeRecord({
     required String schoolId,
     required String assessmentId,
@@ -119,42 +151,44 @@ class TeacherRepository {
     String? remarks,
   }) async {
     if (score < 0 || score > maxPoints) {
-      throw ArgumentError('Score $score must be between 0 and maximum points ($maxPoints)');
+      throw ArgumentError(
+        'Score $score must be between 0 and maximum points ($maxPoints)',
+      );
     }
 
+    final payload = <String, dynamic>{
+      'school_id': schoolId,
+      'assessment_id': assessmentId,
+      'student_profile_id': studentProfileId,
+      'points_obtained': score,
+      'teacher_remarks': remarks,
+    };
+
     try {
-      await _client.from('grade_records').upsert({
-        'school_id': schoolId,
-        'assessment_id': assessmentId,
-        'student_profile_id': studentProfileId,
-        'points_obtained': score,
-        'feedback': remarks,
-      }, onConflict: 'school_id,assessment_id,student_profile_id');
+      await _client.from('grade_records').upsert(
+        payload,
+        onConflict: 'assessment_id,student_profile_id',
+      );
       debugPrint('[TeacherRepository] Grade record saved live');
     } catch (e) {
-      debugPrint('[TeacherRepository] Network error, enqueueing grade record: $e');
+      debugPrint(
+        '[TeacherRepository] Grade write failed; queueing safe mutation: $e',
+      );
       await _syncEngine.enqueueAction(
         schoolId: schoolId,
         tableName: 'grade_records',
         action: SyncAction.insert,
-        payload: {
-          'school_id': schoolId,
-          'assessment_id': assessmentId,
-          'student_profile_id': studentProfileId,
-          'points_obtained': score,
-          'feedback': remarks,
-        },
+        payload: payload,
       );
     }
   }
 
-  /// Screen 26: Authoritative Gradebook Setup & Weight Validation
   Future<Map<String, dynamic>> fetchGradebookSetup({
     required String classSectionId,
     required String subjectId,
     required String termId,
-  }) async {
-    return await _rpc.getGradebookSetup(
+  }) {
+    return _rpc.getGradebookSetup(
       classSectionId: classSectionId,
       subjectId: subjectId,
       termId: termId,

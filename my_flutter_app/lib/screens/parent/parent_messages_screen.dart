@@ -22,6 +22,7 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
   Map<String, dynamic>? _selectedContact;
   List<DirectMessageItem> _messages = [];
   bool _loadingThread = false;
+  bool _sendingMessage = false;
 
   @override
   void initState() {
@@ -34,17 +35,23 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
   void _initRealtime() {
     final repo = ref.read(messagingRepositoryProvider);
     repo.subscribeToRealtime(onMessageReceived: (incoming) {
-      if (mounted) {
-        if (_selectedContact != null &&
-            (_selectedContact!['profile_id'] == incoming.senderProfileId ||
-                _selectedContact!['profile_id'] == incoming.recipientProfileId)) {
-          setState(() {
-            _messages.add(incoming);
-          });
-          _scrollToBottom();
-        }
-        ref.read(parentMessagesControllerProvider.notifier).refresh();
+      if (!mounted) return;
+
+      final selectedId = _selectedContact?['profile_id']?.toString();
+      if (selectedId != null &&
+          (selectedId == incoming.senderProfileId ||
+              selectedId == incoming.recipientProfileId)) {
+        _appendMessageIfMissing(incoming);
+        _scrollToBottom();
       }
+      ref.read(parentMessagesControllerProvider.notifier).refresh();
+    });
+  }
+
+  void _appendMessageIfMissing(DirectMessageItem message) {
+    if (_messages.any((item) => item.id == message.id)) return;
+    setState(() {
+      _messages.add(message);
     });
   }
 
@@ -58,6 +65,16 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
   }
 
   Future<void> _selectContact(Map<String, dynamic> contact) async {
+    final otherId = contact['profile_id']?.toString();
+    if (otherId == null || otherId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This conversation has no valid contact profile.')),
+        );
+      }
+      return;
+    }
+
     setState(() {
       _selectedContact = contact;
       _loadingThread = true;
@@ -65,7 +82,6 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
     });
 
     final repo = ref.read(messagingRepositoryProvider);
-    final otherId = contact['profile_id'] as String;
     final thread = await repo.fetchThread(otherId);
 
     if (mounted) {
@@ -79,24 +95,34 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
 
   Future<void> _sendMessage() async {
     final text = _textController.text.trim();
-    if (text.isEmpty || _selectedContact == null) return;
+    final recipientId = _selectedContact?['profile_id']?.toString();
+    if (text.isEmpty || recipientId == null || recipientId.isEmpty || _sendingMessage) {
+      return;
+    }
 
+    setState(() => _sendingMessage = true);
     final repo = ref.read(messagingRepositoryProvider);
-    final recipientId = _selectedContact!['profile_id'] as String;
-    _textController.clear();
-
     final sent = await repo.sendMessage(
       recipientProfileId: recipientId,
       messageText: text,
     );
 
-    if (sent != null && mounted) {
-      setState(() {
-        _messages.add(sent);
-      });
-      _scrollToBottom();
-      ref.read(parentMessagesControllerProvider.notifier).refresh();
+    if (!mounted) return;
+
+    setState(() => _sendingMessage = false);
+    if (sent == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Message could not be sent. Your text has been kept so you can retry.'),
+        ),
+      );
+      return;
     }
+
+    _textController.clear();
+    _appendMessageIfMissing(sent);
+    _scrollToBottom();
+    ref.read(parentMessagesControllerProvider.notifier).refresh();
   }
 
   void _scrollToBottom() {
@@ -118,8 +144,14 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
     return Scaffold(
       backgroundColor: AppTheme.stitchBg,
       appBar: AppBar(
-        title: const Text('Direct Messages & Staff Communication',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: AppTheme.stitchHeading)),
+        title: const Text(
+          'Direct Messages & Staff Communication',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+            color: AppTheme.stitchHeading,
+          ),
+        ),
         backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 1,
@@ -128,7 +160,8 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Refresh Conversations',
-            onPressed: () => ref.read(parentMessagesControllerProvider.notifier).refresh(),
+            onPressed: () =>
+                ref.read(parentMessagesControllerProvider.notifier).refresh(),
           ),
         ],
       ),
@@ -150,18 +183,30 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
                         color: AppTheme.primarySoft,
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: const Icon(Icons.forum_rounded, size: 36, color: AppTheme.primaryDark),
+                      child: const Icon(
+                        Icons.forum_rounded,
+                        size: 36,
+                        color: AppTheme.primaryDark,
+                      ),
                     ),
                     const SizedBox(height: 20),
                     const Text(
                       'No Active Conversations',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.stitchHeading),
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.stitchHeading,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     const Text(
                       'No messages have been sent or received yet.\nMessages from class teachers and school administrators will appear here.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: AppTheme.stitchMuted, height: 1.5),
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppTheme.stitchMuted,
+                        height: 1.5,
+                      ),
                     ),
                   ],
                 ),
@@ -169,10 +214,11 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
             );
           }
 
-          // Auto-select first contact if none selected
           if (_selectedContact == null && contacts.isNotEmpty) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              _selectContact(contacts.first);
+              if (mounted && _selectedContact == null) {
+                _selectContact(contacts.first);
+              }
             });
           }
 
@@ -192,16 +238,17 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
                           child: _buildContactsPane(contacts),
                         ),
                         Container(width: 1, color: AppTheme.stitchBorder),
-                        Expanded(
-                          child: _buildConversationPane(),
-                        ),
+                        Expanded(child: _buildConversationPane()),
                       ],
                     ),
                   ),
                 );
-              } else {
-                return _buildConversationPane(showContactSelector: true, contacts: contacts);
               }
+
+              return _buildConversationPane(
+                showContactSelector: true,
+                contacts: contacts,
+              );
             },
           );
         },
@@ -223,10 +270,12 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
         Expanded(
           child: ListView.separated(
             itemCount: contacts.length,
-            separatorBuilder: (_, _) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+            separatorBuilder: (_, _) =>
+                const Divider(height: 1, color: Color(0xFFF1F5F9)),
             itemBuilder: (context, index) {
               final contact = contacts[index];
-              final isSelected = _selectedContact?['profile_id'] == contact['profile_id'];
+              final isSelected =
+                  _selectedContact?['profile_id'] == contact['profile_id'];
 
               return ListTile(
                 selected: isSelected,
@@ -235,19 +284,30 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
                 leading: CircleAvatar(
                   backgroundColor: AppTheme.primarySoft,
                   child: Text(
-                    (contact['name'] as String? ?? 'S').substring(0, 1).toUpperCase(),
-                    style: const TextStyle(color: AppTheme.primaryDark, fontWeight: FontWeight.bold),
+                    _initial(contact['name']?.toString()),
+                    style: const TextStyle(
+                      color: AppTheme.primaryDark,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 title: Text(
                   contact['name']?.toString() ?? 'Staff Member',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
                 ),
                 subtitle: Text(
-                  contact['last_message']?.toString() ?? contact['role']?.toString() ?? '',
+                  contact['last_message']?.toString() ??
+                      contact['role']?.toString() ??
+                      '',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11, color: AppTheme.stitchMuted),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.stitchMuted,
+                  ),
                 ),
               );
             },
@@ -257,61 +317,118 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
     );
   }
 
-  Widget _buildConversationPane({bool showContactSelector = false, List<Map<String, dynamic>>? contacts}) {
+  Widget _buildConversationPane({
+    bool showContactSelector = false,
+    List<Map<String, dynamic>>? contacts,
+  }) {
     if (_selectedContact == null) {
       return const Center(child: Text('Select a conversation to start messaging'));
     }
 
     return Column(
       children: [
-        // Header
+        if (showContactSelector && contacts != null)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            color: Colors.white,
+            child: DropdownButtonFormField<String>(
+              initialValue: _selectedContact?['profile_id']?.toString(),
+              decoration: InputDecoration(
+                labelText: 'Conversation',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                isDense: true,
+              ),
+              items: contacts.map((contact) {
+                final id = contact['profile_id']?.toString() ?? '';
+                return DropdownMenuItem<String>(
+                  value: id,
+                  child: Text(contact['name']?.toString() ?? 'Staff Member'),
+                );
+              }).where((item) => item.value?.isNotEmpty == true).toList(),
+              onChanged: (id) {
+                if (id == null) return;
+                for (final contact in contacts) {
+                  if (contact['profile_id']?.toString() == id) {
+                    _selectContact(contact);
+                    return;
+                  }
+                }
+              },
+            ),
+          ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: const BoxDecoration(
+            color: Colors.white,
             border: Border(bottom: BorderSide(color: AppTheme.stitchBorder)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: AppTheme.primarySoft,
-                    child: Text(
-                      (_selectedContact!['name'] as String? ?? 'S').substring(0, 1).toUpperCase(),
-                      style: const TextStyle(color: AppTheme.primaryDark, fontWeight: FontWeight.bold),
+              Expanded(
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 18,
+                      backgroundColor: AppTheme.primarySoft,
+                      child: Text(
+                        _initial(_selectedContact!['name']?.toString()),
+                        style: const TextStyle(
+                          color: AppTheme.primaryDark,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _selectedContact!['name']?.toString() ?? '',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.stitchHeading),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _selectedContact!['name']?.toString() ?? '',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: AppTheme.stitchHeading,
+                            ),
+                          ),
+                          Text(
+                            _selectedContact!['role']?.toString() ?? 'School Staff',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: AppTheme.stitchMuted,
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        _selectedContact!['role']?.toString() ?? 'School Staff',
-                        style: const TextStyle(fontSize: 11, color: AppTheme.stitchMuted),
-                      ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
-              const StitchChip(label: 'Connected', variant: StitchChipVariant.success),
+              const SizedBox(width: 8),
+              const StitchChip(
+                label: 'Messages',
+                variant: StitchChipVariant.neutral,
+              ),
             ],
           ),
         ),
-
-        // Messages list
         Expanded(
           child: _loadingThread
               ? const Center(child: CircularProgressIndicator())
               : _messages.isEmpty
                   ? const Center(
-                      child: Text('No messages in this conversation yet. Send a message below.',
-                          style: TextStyle(color: AppTheme.stitchMuted, fontSize: 12)),
+                      child: Text(
+                        'No messages in this conversation yet. Send a message below.',
+                        style: TextStyle(
+                          color: AppTheme.stitchMuted,
+                          fontSize: 12,
+                        ),
+                      ),
                     )
                   : ListView.builder(
                       controller: _scrollController,
@@ -322,30 +439,43 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
                         final isMe = msg.isMe;
 
                         return Align(
-                          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                          alignment: isMe
+                              ? Alignment.centerRight
+                              : Alignment.centerLeft,
                           child: Container(
                             margin: const EdgeInsets.only(bottom: 10),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
                             constraints: const BoxConstraints(maxWidth: 440),
                             decoration: BoxDecoration(
-                              color: isMe ? AppTheme.primary : const Color(0xFFF1F5F9),
+                              color: isMe
+                                  ? AppTheme.primary
+                                  : const Color(0xFFF1F5F9),
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Column(
-                              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                              crossAxisAlignment: isMe
+                                  ? CrossAxisAlignment.end
+                                  : CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   msg.message,
                                   style: TextStyle(
-                                    color: isMe ? Colors.white : AppTheme.stitchHeading,
+                                    color: isMe
+                                        ? Colors.white
+                                        : AppTheme.stitchHeading,
                                     fontSize: 13,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '${msg.createdAt.hour}:${msg.createdAt.minute.toString().padLeft(2, "0")}',
+                                  '${msg.createdAt.hour}:${msg.createdAt.minute.toString().padLeft(2, '0')}',
                                   style: TextStyle(
-                                    color: isMe ? Colors.white.withAlpha(180) : AppTheme.stitchMuted,
+                                    color: isMe
+                                        ? Colors.white.withAlpha(180)
+                                        : AppTheme.stitchMuted,
                                     fontSize: 10,
                                   ),
                                 ),
@@ -356,8 +486,6 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
                       },
                     ),
         ),
-
-        // Input bar
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: const BoxDecoration(
@@ -369,18 +497,36 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
               Expanded(
                 child: TextField(
                   controller: _textController,
+                  enabled: !_sendingMessage,
                   decoration: InputDecoration(
                     hintText: 'Type your message...',
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppTheme.stitchBorder)),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: const BorderSide(
+                        color: AppTheme.stitchBorder,
+                      ),
+                    ),
                   ),
                   onSubmitted: (_) => _sendMessage(),
                 ),
               ),
               const SizedBox(width: 10),
               IconButton(
-                onPressed: _sendMessage,
-                icon: const Icon(Icons.send_rounded, color: AppTheme.primary),
+                onPressed: _sendingMessage ? null : _sendMessage,
+                icon: _sendingMessage
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(
+                        Icons.send_rounded,
+                        color: AppTheme.primary,
+                      ),
               ),
             ],
           ),
@@ -388,5 +534,9 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
       ],
     );
   }
-}
 
+  static String _initial(String? name) {
+    final trimmed = name?.trim() ?? '';
+    return trimmed.isEmpty ? 'S' : trimmed.substring(0, 1).toUpperCase();
+  }
+}

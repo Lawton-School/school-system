@@ -43,7 +43,6 @@ class TeacherDashboardPage extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: AppTheme.stitchBg,
-      floatingActionButton: const TeacherAiFloatingButton(),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -82,7 +81,7 @@ class TeacherDashboardPage extends ConsumerWidget {
           ],
         ),
         actions: [
-          const StitchChip(label: 'Term 1 · 2026', variant: StitchChipVariant.primary, icon: Icons.calendar_today_rounded),
+          const StitchChip(label: 'Live data', variant: StitchChipVariant.primary, icon: Icons.cloud_done_rounded),
           const SizedBox(width: 8),
           const Center(child: SyncStatusBadge()),
           IconButton(
@@ -679,4 +678,3 @@ class TeacherDashboardPage extends ConsumerWidget {
     );
   }
 }
-

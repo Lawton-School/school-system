@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
+import '../../router/router.dart';
 import '../../services/services.dart';
-import '../../widgets/stitch_widgets.dart';
+import 'finance_currency_kpi_header.dart';
 
 class SchoolFinanceScreen extends ConsumerStatefulWidget {
   const SchoolFinanceScreen({super.key});
@@ -351,6 +353,18 @@ class _SchoolFinanceScreenState extends ConsumerState<SchoolFinanceScreen> {
               Text('Dashboard', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: AppTheme.stitchHeading)),
             ],
           ),
+          actions: [
+            IconButton(
+              tooltip: 'Invoices',
+              onPressed: () => context.go(AppRoutes.schoolAdminInvoices),
+              icon: const Icon(Icons.receipt_long_rounded),
+            ),
+            IconButton(
+              tooltip: 'Payments ledger',
+              onPressed: () => context.go(AppRoutes.schoolAdminPayments),
+              icon: const Icon(Icons.payments_rounded),
+            ),
+          ],
           bottom: const TabBar(
             isScrollable: true,
             labelColor: AppTheme.primary,
@@ -366,63 +380,20 @@ class _SchoolFinanceScreenState extends ConsumerState<SchoolFinanceScreen> {
         ),
         body: Column(
           children: [
-            // Finance KPI Header — real data from getFinanceDashboardMetrics()
+            // Finance KPI Header — currency-safe data from getFinanceDashboardMetrics().
             Consumer(
               builder: (context, ref, _) {
                 final metricsAsync = ref.watch(financeDashboardMetricsProvider);
                 return metricsAsync.when(
                   loading: () => const LinearProgressIndicator(),
-                  error: (_, _) => const SizedBox.shrink(),
-                  data: (m) {
-                    final invoiced = m['total_invoiced'] ?? m['invoiced'] ?? 0.0;
-                    final collected = m['total_collected'] ?? m['collected'] ?? 0.0;
-                    final outstanding = m['total_outstanding'] ?? m['outstanding'] ?? 0.0;
-                    final expenses = m['total_expenses'] ?? m['expenses'] ?? 0.0;
-                    final rate = m['collection_rate'] ?? (invoiced > 0 ? (collected / invoiced * 100) : 0.0);
-
-                    String fmt(dynamic v) {
-                      final d = (v is num) ? v.toDouble() : 0.0;
-                      if (d >= 1000000) return '\$${(d / 1000000).toStringAsFixed(1)}M';
-                      if (d >= 1000) return '\$${(d / 1000).toStringAsFixed(1)}K';
-                      return '\$${d.toStringAsFixed(0)}';
-                    }
-
-                    return LayoutBuilder(
-                      builder: (ctx, constraints) {
-                        final isMobile = constraints.maxWidth < 600;
-                        return Container(
-                          color: Colors.white,
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                          child: isMobile
-                              ? GridView.count(
-                                  crossAxisCount: 2,
-                                  crossAxisSpacing: 10,
-                                  mainAxisSpacing: 10,
-                                  shrinkWrap: true,
-                                  physics: const NeverScrollableScrollPhysics(),
-                                  childAspectRatio: 2.2,
-                                  children: [
-                                    StitchKpiCard(label: 'Invoiced', value: fmt(invoiced), hint: 'Current term', icon: Icons.receipt_long_rounded),
-                                    StitchKpiCard(label: 'Collected', value: fmt(collected), hint: '${rate.toStringAsFixed(1)}% rate', statusColor: StitchChipVariant.success, icon: Icons.check_circle_rounded),
-                                    StitchKpiCard(label: 'Outstanding', value: fmt(outstanding), hint: outstanding > 0 ? 'Pending collection' : 'All clear', statusColor: outstanding > 0 ? StitchChipVariant.warn : StitchChipVariant.success, icon: Icons.pending_rounded),
-                                    StitchKpiCard(label: 'Expenses', value: fmt(expenses), hint: 'Current month', statusColor: StitchChipVariant.neutral, icon: Icons.account_balance_wallet_rounded),
-                                  ],
-                                )
-                              : Row(
-                                  children: [
-                                    Expanded(child: StitchKpiCard(label: 'Invoiced', value: fmt(invoiced), hint: 'Current term', icon: Icons.receipt_long_rounded)),
-                                    const SizedBox(width: 10),
-                                    Expanded(child: StitchKpiCard(label: 'Collected', value: fmt(collected), hint: '${rate.toStringAsFixed(1)}% rate', statusColor: StitchChipVariant.success, icon: Icons.check_circle_rounded)),
-                                    const SizedBox(width: 10),
-                                    Expanded(child: StitchKpiCard(label: 'Outstanding', value: fmt(outstanding), hint: outstanding > 0 ? 'Pending' : 'All clear', statusColor: outstanding > 0 ? StitchChipVariant.warn : StitchChipVariant.success, icon: Icons.pending_rounded)),
-                                    const SizedBox(width: 10),
-                                    Expanded(child: StitchKpiCard(label: 'Expenses', value: fmt(expenses), hint: 'Current month', statusColor: StitchChipVariant.neutral, icon: Icons.account_balance_wallet_rounded)),
-                                  ],
-                                ),
-                        );
-                      },
-                    );
-                  },
+                  error: (error, _) => Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                      'Unable to load finance overview: $error',
+                      style: const TextStyle(color: AppTheme.danger, fontSize: 12),
+                    ),
+                  ),
+                  data: (metrics) => FinanceCurrencyKpiHeader(metrics: metrics),
                 );
               },
             ),
@@ -442,7 +413,6 @@ class _SchoolFinanceScreenState extends ConsumerState<SchoolFinanceScreen> {
     );
   }
 }
-
 
 // ─────────────────────────────────────────────────────────────────
 // TAB 1: INVOICES & FEES

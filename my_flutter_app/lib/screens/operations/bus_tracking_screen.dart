@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme.dart';
 import '../../models/models.dart';
 import '../../providers/providers.dart';
@@ -14,7 +15,45 @@ class BusTrackingScreen extends ConsumerStatefulWidget {
 
 class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
   BusRouteModel? _selectedRoute;
-  bool _simulating = false;
+  RealtimeChannel? _telemetryChannel;
+  String? _subscribedRouteId;
+
+  @override
+  void dispose() {
+    if (_telemetryChannel != null) {
+      ref.read(supabaseClientProvider).removeChannel(_telemetryChannel!);
+      _telemetryChannel = null;
+    }
+    super.dispose();
+  }
+
+  void _subscribeTelemetry(String schoolId, String routeId) {
+    if (_subscribedRouteId == routeId) return;
+
+    final client = ref.read(supabaseClientProvider);
+    if (_telemetryChannel != null) {
+      client.removeChannel(_telemetryChannel!);
+    }
+
+    _subscribedRouteId = routeId;
+    _telemetryChannel = client.channel('fleet:$schoolId:$routeId');
+    _telemetryChannel!
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'bus_telemetry',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'route_id',
+            value: routeId,
+          ),
+          callback: (_) {
+            if (!mounted) return;
+            ref.invalidate(busTelemetryProvider((schoolId, routeId)));
+          },
+        )
+        .subscribe();
+  }
 
   void _showAddRouteDialog(BuildContext context, String schoolId) {
     final nameCtrl = TextEditingController();
@@ -32,12 +71,12 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
             children: [
               TextField(
                 controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Route Name (e.g. Northern Route #1)'),
+                decoration: const InputDecoration(labelText: 'Route Name'),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: plateCtrl,
-                decoration: const InputDecoration(labelText: 'Vehicle Number / Plate (e.g. ABZ-4921)'),
+                decoration: const InputDecoration(labelText: 'Vehicle Number / Plate'),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -77,8 +116,8 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
 
   void _showAddStopDialog(BuildContext context, String schoolId, String routeId) {
     final nameCtrl = TextEditingController();
-    final latCtrl = TextEditingController(text: '-17.82485');
-    final lngCtrl = TextEditingController(text: '31.05303');
+    final latCtrl = TextEditingController();
+    final lngCtrl = TextEditingController();
 
     showDialog(
       context: context,
@@ -89,7 +128,7 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
           children: [
             TextField(
               controller: nameCtrl,
-              decoration: const InputDecoration(labelText: 'Stop Name (e.g. Avondale Shopping Centre)'),
+              decoration: const InputDecoration(labelText: 'Stop Name'),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -109,16 +148,21 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
-              if (nameCtrl.text.trim().isEmpty) return;
-              final lat = double.tryParse(latCtrl.text.trim()) ?? -17.82485;
-              final lng = double.tryParse(lngCtrl.text.trim()) ?? 31.05303;
+              final latitude = double.tryParse(latCtrl.text.trim());
+              final longitude = double.tryParse(lngCtrl.text.trim());
+              if (nameCtrl.text.trim().isEmpty || latitude == null || longitude == null) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
+                  const SnackBar(content: Text('Enter a stop name and valid coordinates.')),
+                );
+                return;
+              }
               final client = ref.read(supabaseClientProvider);
               await BusTrackingService(client).createBusStop(
                 schoolId: schoolId,
                 routeId: routeId,
                 stopName: nameCtrl.text.trim(),
-                latitude: lat,
-                longitude: lng,
+                latitude: latitude,
+                longitude: longitude,
               );
               ref.invalidate(busStopsProvider((schoolId, routeId)));
               if (ctx.mounted) Navigator.pop(ctx);
@@ -128,26 +172,6 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
         ],
       ),
     );
-  }
-
-  Future<void> _simulateDriverPing(String schoolId, String routeId) async {
-    setState(() => _simulating = true);
-    final client = ref.read(supabaseClientProvider);
-    // Ping telemetry with moving coords
-    await BusTrackingService(client).sendTelemetryPing(
-      schoolId: schoolId,
-      routeId: routeId,
-      latitude: -17.82485 + (DateTime.now().second * 0.0001),
-      longitude: 31.05303 + (DateTime.now().second * 0.0001),
-      speed: 38.5,
-    );
-    ref.invalidate(busTelemetryProvider((schoolId, routeId)));
-    if (mounted) {
-      setState(() => _simulating = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bus GPS telemetry ping transmitted ✓')),
-      );
-    }
   }
 
   @override
@@ -161,9 +185,7 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
     final routesAsync = ref.watch(busRoutesProvider(schoolId));
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Live Bus Tracking & Fleet'),
-      ),
+      appBar: AppBar(title: const Text('Live Bus Tracking & Fleet')),
       body: routesAsync.when(
         data: (routes) {
           if (routes.isEmpty) {
@@ -186,10 +208,13 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
           }
 
           _selectedRoute ??= routes.first;
+          final selected = _selectedRoute!;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _subscribeTelemetry(schoolId, selected.id);
+          });
 
           return Column(
             children: [
-              // Route Selector Bar
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 color: AppTheme.surfaceDark,
@@ -206,7 +231,11 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
                         items: routes
                             .map((r) => DropdownMenuItem(value: r, child: Text('${r.routeName} (${r.vehicleNumber})')))
                             .toList(),
-                        onChanged: (v) => setState(() => _selectedRoute = v),
+                        onChanged: (route) {
+                          if (route == null) return;
+                          setState(() => _selectedRoute = route);
+                          _subscribeTelemetry(schoolId, route.id);
+                        },
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -218,24 +247,21 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
                   ],
                 ),
               ),
-
-              // Live Telemetry Card & Map Mockup View
-              if (_selectedRoute != null)
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildTelemetryCard(schoolId, _selectedRoute!),
-                        const SizedBox(height: 16),
-                        _buildDriverInfoCard(_selectedRoute!),
-                        const SizedBox(height: 16),
-                        _buildStopsTimeline(schoolId, _selectedRoute!),
-                      ],
-                    ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _buildTelemetryCard(schoolId, selected),
+                      const SizedBox(height: 16),
+                      _buildDriverInfoCard(selected),
+                      const SizedBox(height: 16),
+                      _buildStopsTimeline(schoolId, selected),
+                    ],
                   ),
                 ),
+              ),
             ],
           );
         },
@@ -254,39 +280,42 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            const Row(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppTheme.success,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    const Text('Live GPS Radar', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  ],
+                Icon(Icons.sensors_rounded, color: AppTheme.primary),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text('GPS Telemetry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 ),
-                ElevatedButton.icon(
-                  onPressed: _simulating ? null : () => _simulateDriverPing(schoolId, route.id),
-                  icon: const Icon(Icons.satellite_alt_rounded, size: 16),
-                  label: _simulating
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Ping GPS (Driver)'),
-                ),
+                Chip(label: Text('Realtime feed')),
               ],
             ),
             const SizedBox(height: 14),
             telemetryAsync.when(
-              data: (t) {
-                final speed = t != null ? '${t.speed.toStringAsFixed(1)} km/h' : '0.0 km/h (Stationary)';
-                final lat = t != null ? t.latitude.toStringAsFixed(5) : '-17.82485';
-                final lng = t != null ? t.longitude.toStringAsFixed(5) : '31.05303';
-                final time = t != null ? '${t.recordedAt.hour}:${t.recordedAt.minute.toString().padLeft(2, '0')}' : 'Just now';
+              data: (telemetry) {
+                if (telemetry == null) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 18),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.gps_off_rounded, color: AppTheme.textMuted),
+                        SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'No GPS telemetry has been received for this route. A real GPS device/provider must publish telemetry before live location is available.',
+                            style: TextStyle(color: AppTheme.textMuted),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final age = DateTime.now().difference(telemetry.recordedAt);
+                final stale = age.inMinutes >= 10;
+                final time = '${telemetry.recordedAt.day}/${telemetry.recordedAt.month} '
+                    '${telemetry.recordedAt.hour}:${telemetry.recordedAt.minute.toString().padLeft(2, '0')}';
 
                 return Container(
                   padding: const EdgeInsets.all(14),
@@ -295,12 +324,26 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: AppTheme.borderDark),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  child: Wrap(
+                    spacing: 30,
+                    runSpacing: 16,
+                    alignment: WrapAlignment.spaceAround,
                     children: [
-                      _TelemetryStat(label: 'Current Speed', value: speed, color: AppTheme.primaryLight),
-                      _TelemetryStat(label: 'Coordinates', value: '$lat, $lng', color: AppTheme.secondary),
-                      _TelemetryStat(label: 'Last Ping', value: time, color: AppTheme.accent),
+                      _TelemetryStat(
+                        label: 'Current Speed',
+                        value: '${telemetry.speed.toStringAsFixed(1)} km/h',
+                        color: AppTheme.primaryLight,
+                      ),
+                      _TelemetryStat(
+                        label: 'Coordinates',
+                        value: '${telemetry.latitude.toStringAsFixed(5)}, ${telemetry.longitude.toStringAsFixed(5)}',
+                        color: AppTheme.secondary,
+                      ),
+                      _TelemetryStat(
+                        label: stale ? 'Last Ping · Stale' : 'Last Ping',
+                        value: time,
+                        color: stale ? AppTheme.warning : AppTheme.success,
+                      ),
                     ],
                   ),
                 );
@@ -332,8 +375,10 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
                 children: [
                   Text('Vehicle: ${route.vehicleNumber}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   const SizedBox(height: 4),
-                  Text('Driver: ${route.driverName ?? "Assigned Fleet Driver"} • ${route.driverPhone ?? "No phone"}',
-                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+                  Text(
+                    'Driver: ${route.driverName ?? "Not assigned"} • ${route.driverPhone ?? "No phone"}',
+                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
+                  ),
                 ],
               ),
             ),
@@ -391,11 +436,7 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
                               child: Center(child: Text('${index + 1}', style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
                             ),
                             if (index != stops.length - 1)
-                              Container(
-                                width: 2,
-                                height: 36,
-                                color: AppTheme.borderDark,
-                              ),
+                              Container(width: 2, height: 36, color: AppTheme.borderDark),
                           ],
                         ),
                         const SizedBox(width: 12),
@@ -406,8 +447,10 @@ class _BusTrackingScreenState extends ConsumerState<BusTrackingScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(stop.stopName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                Text('Lat: ${stop.latitude.toStringAsFixed(4)}, Lng: ${stop.longitude.toStringAsFixed(4)}',
-                                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 11)),
+                                Text(
+                                  'Lat: ${stop.latitude.toStringAsFixed(4)}, Lng: ${stop.longitude.toStringAsFixed(4)}',
+                                  style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                                ),
                               ],
                             ),
                           ),

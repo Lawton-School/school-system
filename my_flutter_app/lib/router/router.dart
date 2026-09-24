@@ -18,10 +18,19 @@ import '../screens/school_admin/gradebook_setup_screen.dart';
 import '../screens/school_admin/school_reports_screen.dart';
 import '../screens/school_admin/notifications_screen.dart';
 import '../screens/school_admin/report_cards_screen.dart';
+import '../screens/school_admin/admissions_screen.dart';
+import '../screens/school_admin/direct_messaging_screen.dart';
+import '../screens/school_admin/library_screen.dart';
+import '../screens/school_admin/behavior_screen.dart';
+import '../screens/school_admin/school_settings_screen.dart';
+import '../screens/school_admin/students_directory_screen.dart';
+import '../screens/school_admin/announcements_screen.dart';
 import '../screens/operations/bus_tracking_screen.dart';
 import '../screens/operations/marketplace_screen.dart';
 import '../screens/operations/sync_diagnostics_screen.dart';
 import '../screens/finance/school_finance_screen.dart';
+import '../screens/finance/invoices_screen.dart';
+import '../screens/finance/payments_ledger_screen.dart';
 import '../screens/finance/parent_fees_screen.dart';
 import '../screens/teacher/teacher_shell.dart';
 import '../screens/teacher/teacher_operations_screen.dart';
@@ -60,14 +69,21 @@ class AppRoutes {
   static const studentEnrollments = '/school-admin/enrollments';
   static const parentStudentMapping = '/school-admin/parent-student-mapping';
 
-  // Phase 3: Operations & Leave
+  // Phase 3: Operations & Admissions
   static const schoolAdminOperations = '/school-admin/operations';
+  static const schoolAdminAdmissions = '/school-admin/admissions';
+  static const schoolAdminMessages = '/school-admin/messages';
 
-  // Phase 4: Gradebook & LMS
+  // Phase 4: Gradebook, Reports & Administration
   static const schoolAdminGradebook = '/school-admin/gradebook-setup';
   static const schoolAdminReportCards = '/school-admin/report-cards';
   static const schoolAdminReports = '/school-admin/reports';
   static const schoolAdminNotifications = '/school-admin/notifications';
+  static const schoolAdminLibrary = '/school-admin/library';
+  static const schoolAdminBehavior = '/school-admin/behavior';
+  static const schoolAdminSettings = '/school-admin/settings';
+  static const schoolAdminStudents = '/school-admin/students';
+  static const schoolAdminAnnouncements = '/school-admin/announcements';
 
   // Phase 5: Operations & Auxiliary Modules
   static const schoolAdminBus = '/school-admin/bus-fleet';
@@ -75,6 +91,8 @@ class AppRoutes {
 
   // Phase 6: Finance & Payments
   static const schoolAdminFinance = '/school-admin/finance';
+  static const schoolAdminInvoices = '/school-admin/finance/invoices';
+  static const schoolAdminPayments = '/school-admin/finance/payments';
   static const parentFees = '/parent/fees';
 
   // Phase 7: Sync Diagnostics
@@ -126,17 +144,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isOnLogin = state.uri.toString() == AppRoutes.login;
       final isOnProfilePicker = state.uri.toString() == AppRoutes.profilePicker;
 
-      // Not logged in → force to login
       if (!isLoggedIn) {
         return isOnLogin ? null : AppRoutes.login;
       }
 
-      // Logged in but no active session → pick profile
       if (isLoggedIn && activeSession == null) {
         return isOnProfilePicker ? null : AppRoutes.profilePicker;
       }
 
-      // Logged in + session → redirect away from auth screens
       if (isLoggedIn && activeSession != null && (isOnLogin || isOnProfilePicker)) {
         return _dashboardForRole(activeSession.role);
       }
@@ -153,7 +168,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const ProfilePickerScreen(),
       ),
 
-      // ── Super Admin Shell ──────────────────────────────
       ShellRoute(
         builder: (context, state, child) => SuperAdminShell(child: child),
         routes: [
@@ -172,7 +186,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // ── School Admin Shell ──────────────────────────────
       ShellRoute(
         builder: (context, state, child) => SchoolAdminShell(child: child),
         routes: [
@@ -192,7 +205,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.schoolAdminStructure,
             builder: (context, state) => const AcademicStructurePage(),
           ),
-          // Phase 2 routes
           GoRoute(
             path: AppRoutes.academicYears,
             builder: (context, state) => const AcademicYearsScreen(),
@@ -222,6 +234,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const SchoolAdminOperationsPage(),
           ),
           GoRoute(
+            path: AppRoutes.schoolAdminAdmissions,
+            builder: (context, state) => const AdmissionsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminMessages,
+            builder: (context, state) => const DirectMessagingScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.schoolAdminGradebook,
             builder: (context, state) => const GradebookSetupScreen(),
           ),
@@ -238,6 +258,14 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const SchoolFinanceScreen(),
           ),
           GoRoute(
+            path: AppRoutes.schoolAdminInvoices,
+            builder: (context, state) => const InvoicesScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminPayments,
+            builder: (context, state) => const PaymentsLedgerScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.schoolAdminReports,
             builder: (context, state) => const ReportsAnalyticsScreen(),
           ),
@@ -250,32 +278,50 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const NotificationsScreen(),
           ),
           GoRoute(
+            path: AppRoutes.schoolAdminLibrary,
+            builder: (context, state) => const LibraryScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminBehavior,
+            builder: (context, state) => const BehaviorScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminSettings,
+            builder: (context, state) => const SchoolSettingsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminStudents,
+            builder: (context, state) => const StudentsDirectoryScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.schoolAdminAnnouncements,
+            builder: (context, state) => const AnnouncementsScreen(),
+          ),
+          GoRoute(
             path: AppRoutes.syncDiagnostics,
             builder: (context, state) => const SyncDiagnosticsScreen(),
           ),
         ],
       ),
 
-      // ── Teacher Shell ────────────────────────────────────
       ShellRoute(
-       builder: (context, state, child) => TeacherShell(child: child),
-       routes: [
-         GoRoute(
-           path: AppRoutes.teacherDashboard,
-           builder: (context, state) => const TeacherDashboardPage(),
-         ),
-         GoRoute(
-           path: AppRoutes.teacherOperations,
-           builder: (context, state) => const TeacherOperationsScreen(),
-         ),
-         GoRoute(
-           path: AppRoutes.teacherAiAssistant,
-           builder: (context, state) => const TeacherAiAssistantScreen(),
-         ),
-       ],
+        builder: (context, state, child) => TeacherShell(child: child),
+        routes: [
+          GoRoute(
+            path: AppRoutes.teacherDashboard,
+            builder: (context, state) => const TeacherDashboardPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.teacherOperations,
+            builder: (context, state) => const TeacherOperationsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.teacherAiAssistant,
+            builder: (context, state) => const TeacherAiAssistantScreen(),
+          ),
+        ],
       ),
 
-      // ── Parent Shell ─────────────────────────────────────
       ShellRoute(
         builder: (context, state, child) => ParentShell(child: child),
         routes: [
@@ -298,7 +344,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // ── Student Shell ────────────────────────────────────
       ShellRoute(
         builder: (context, state, child) => StudentShell(child: child),
         routes: [
@@ -328,6 +373,10 @@ String _dashboardForRole(String role) {
       return AppRoutes.parentDashboard;
     case AppRoles.student:
       return AppRoutes.studentDashboard;
+    case AppRoles.financeManager:
+      return AppRoutes.schoolAdminFinance;
+    case AppRoles.registrar:
+      return AppRoutes.schoolAdminAdmissions;
     default:
       return AppRoutes.profilePicker;
   }

@@ -8,12 +8,6 @@ class AppConstants {
   static const String supabaseAnonKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRyeG5uaGp4anB5YWR3Y2NheG5rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYzMTc4NjEsImV4cCI6MjEwMTg5Mzg2MX0.q1vONwqQuqbYmn0GemxJimh5qkiRBIaKkgi5NyehkLU';
 
-  // OpenRouter DeepSeek Configuration for Live AI Tutor.
-  // Supply with: --dart-define=OPENROUTER_API_KEY=...
-  static const String openRouterApiKey =
-      String.fromEnvironment('OPENROUTER_API_KEY');
-  static const String aiModel = 'deepseek/deepseek-chat';
-
   // Local DB
   static const String localDbName = 'ems_local.db';
 
@@ -35,6 +29,8 @@ class AppRoles {
   static const String teacher = 'teacher';
   static const String parent = 'parent';
   static const String student = 'student';
+  static const String financeManager = 'finance_manager';
+  static const String registrar = 'registrar';
 
   static const List<String> all = [
     superAdmin,
@@ -42,6 +38,8 @@ class AppRoles {
     teacher,
     parent,
     student,
+    financeManager,
+    registrar,
   ];
 
   static String displayName(String role) {
@@ -56,6 +54,10 @@ class AppRoles {
         return 'Parent';
       case student:
         return 'Student';
+      case financeManager:
+        return 'Finance Manager';
+      case registrar:
+        return 'Registrar';
       default:
         return role;
     }

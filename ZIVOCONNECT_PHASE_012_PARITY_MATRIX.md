@@ -1,94 +1,95 @@
-# ZivoConnect EMS — Phase 012 Parity Matrix
-## Screens 00–28 Integration & Authoritative Backend Tracking
+# ZivoConnect EMS — Integration Parity Matrix
+## Screens 00–28 · Evidence-Based Status
 
-> **Last Updated:** 2026-09-22 — Phase 012 Backend Integration & Zero-Mock Architecture
+> **Updated:** 2026-09-24
 >
-> **Status Values:**
-> - `CONNECTED` — Real backend data, typed models, functioning UI, offline cache & actions wired.
-> - `PARTIALLY CONNECTED` — Real backend queries/RPC partially wired; some actions, filters or offline states pending.
-> - `EXTERNAL DEPENDENCY` — Real UI and adapters built, but relies on third-party provider (e.g., payment gateway, SMS/FCM, GPS hardware).
-> - `BLOCKED` — Missing prerequisite or verified backend conflict.
+> **Source-of-truth order:** live Supabase → current GitHub branch → frozen Screens 00–28 → older handover/docs.
+>
+> **Status values**
+> - `CONNECTED` — real backend data and actions are wired, no production mock dependency, tenant/role scope is authoritative.
+> - `PARTIALLY CONNECTED` — useful real functionality exists, but an implementation/architecture gap remains.
+> - `EXTERNAL DEPENDENCY` — completion depends on a third-party provider or hardware outside the current codebase.
+> - `BLOCKED` — a verified prerequisite is missing.
 
 ---
 
-### Phase 012 Architecture Summary
+## Current Architecture Baseline
 
-| Layer | File(s) | Purpose |
-|---|---|---|
-| **Models** | `lib/models/models.dart` | `TeacherDashboardMetrics`, `ParentDashboardData`, `AuthorizedChild`, `DirectMessageItem`, `FinanceCurrencySummary`, `PaymentModel`, + all Phase 1–6 models |
-| **RPC Client** | `lib/services/rpc_client.dart` | Typed wrappers for all Supabase `rpc()` calls (Screens 01–28) |
-| **Teacher Repository** | `lib/repositories/teacher_repository.dart` | Fetch dashboard metrics, roll call, gradebook, gradebook setup; offline Drift queue |
-| **Parent Repository** | `lib/repositories/parent_repository.dart` | Fetch authorized children (via `user_relationships`), parent dashboard, student 360, invoices, payments |
-| **Messaging Repository** | `lib/repositories/messaging_repository.dart` | Conversations, thread, send, Supabase Realtime channel, deduplication |
-| **Teacher Controllers** | `lib/controllers/teacher_controllers.dart` | `teacherDashboardControllerProvider`, roll call provider, gradebook provider, setup provider |
-| **Parent Controllers** | `lib/controllers/parent_controllers.dart` | `parentChildrenProvider`, `activeSelectedChildProvider`, `parentDashboardDataProvider`, `parentMessagesControllerProvider`, invoice/payment/360 providers |
-| **Providers** | `lib/providers/providers.dart` | `activeSessionProvider`, `rpcClientProvider`, `supabaseClientProvider`, `appDatabaseProvider`, all Phase 1–6 FutureProviders |
-| **Sync Engine** | `lib/core/sync_engine.dart` | Offline mutation queue to Drift `OfflineQueueEntries` to Supabase |
+- Flutter 3 / Dart, Riverpod, go_router, Supabase and Drift remain the application foundation.
+- Security-critical AI calls now go through `ai-chat-proxy`; client-side OpenRouter calls are removed from the active application path.
+- Profile switching uses the server-authoritative `switch-profile` Edge Function and refreshes auth before local context changes.
+- Live Supabase migrations and Edge Functions have been reconciled into source control and replay successfully in CI.
+- Flutter analyze/test/web-build and local Supabase migration replay are green on the latest validated branch head.
+- Payment reconciliation, report-card lifecycle, marketplace checkout, admissions status/linking, library actions, behaviour actions, announcements lifecycle and school settings use server-authoritative RPCs where available.
 
 ---
 
-### Screens 00–28 Status
+## Screens 00–28
 
-| # | Screen Name | Flutter File | Repository | Provider | Supabase RPC / Table | Realtime | Status | Remaining Issue |
-|---|---|---|---|---|---|---|---|---|
-| **00** | Design System & Tokens | `lib/core/theme.dart` | N/A | N/A | N/A | No | **CONNECTED** | None |
-| **01** | School Admin Command Center | `lib/screens/school_admin/school_admin_shell.dart` | RpcClient | `schoolAdminMetricsProvider` | `get_school_admin_dashboard_metrics()` | No | **PARTIALLY CONNECTED** | Detailed staff list / recent activity still raw-map parsing |
-| **02** | Student 360 Unified Record | *(file to create)* | RpcClient | `student360Provider(id)` | `get_student_360_summary(student_profile_id)` | No | **PARTIALLY CONNECTED** | Full 8-tab Stitch view not yet implemented; RPC stub complete |
-| **03** | Teacher Dashboard | `lib/screens/teacher/teacher_shell.dart` | `TeacherRepository` | `teacherDashboardControllerProvider` | `get_teacher_dashboard_metrics()` | No | **CONNECTED** | Zero hardcoded mocks. All KPIs, schedule, assignments, classes, announcements live |
-| **04** | Teacher Attendance Roll Call | `lib/screens/teacher/teacher_operations_screen.dart` | `TeacherRepository` | `teacherRollCallProvider` | `get_attendance_roll_call()` + `daily_attendance` upsert | No | **CONNECTED** | Offline queue to Drift `OfflineQueueEntries` to sync engine |
-| **05** | Teacher Gradebook | `lib/screens/teacher/teacher_gradebook_screen.dart` | `TeacherRepository` | `teacherGradebookProvider` | `get_teacher_gradebook()` + `grade_records` upsert | No | **CONNECTED** | Score validation (0 <= score <= max), live upsert, offline fallback |
-| **06** | Parent Dashboard | `lib/screens/parent/parent_shell.dart` | `ParentRepository` | `parentDashboardDataProvider` + `parentChildrenProvider` | `get_parent_dashboard()` + `user_relationships` | No | **CONNECTED** | Child switcher from `user_relationships`. Zero mock children. Multi-currency fees |
-| **07** | Parent Academics | `lib/screens/parent/parent_academics_screen.dart` | `ParentRepository` | `student360SummaryProvider(id)` | `get_student_360_summary()` | No | **CONNECTED** | Subjects, assessments, report card summary, KPI averages all live |
-| **08** | Parent Fees & Payments | `lib/screens/finance/parent_fees_screen.dart` | `ParentRepository` | `studentInvoicesProvider` + `studentPaymentsProvider` | `invoices` + `payments` | No | **CONNECTED** | Balance = `total_amount - paid_amount`. Server-authoritative |
-| **09** | Parent Messages | `lib/screens/parent/parent_messages_screen.dart` | `MessagingRepository` | `parentMessagesControllerProvider` | `direct_messages` + `profiles` | **Yes** | **CONNECTED** | Realtime INSERT on `recipient_profile_id`. Deduplication, lifecycle disposal, thread view |
-| **10** | Super Admin Platform Overview | `lib/screens/super_admin/super_admin_shell.dart` | RpcClient | `superAdminMetricsProvider` | `get_super_admin_platform_metrics()` | No | **PARTIALLY CONNECTED** | KPI parsing complete; MAU from heartbeat wired |
-| **11** | Super Admin Schools Directory | `lib/screens/super_admin/super_admin_shell.dart` | RpcClient | `superAdminSchoolsProvider` | `get_super_admin_schools_directory()` | No | **PARTIALLY CONNECTED** | School list rendering wired; tenant action dialogs pending |
-| **12** | Finance Dashboard | `lib/screens/finance/school_finance_screen.dart` | RpcClient | `financeDashboardMetricsProvider` | `get_finance_dashboard_metrics()` | No | **PARTIALLY CONNECTED** | KPI cards live. Multi-currency charts pending |
-| **13** | Invoices Management | `lib/screens/finance/invoices_screen.dart` | SupabaseClient | `invoicesProvider` | `invoices` + `invoice_items` + `fee_types` | No | **PARTIALLY CONNECTED** | Table live. Batch invoice generation dialog pending |
-| **14** | Payments Ledger & Reconciliation | `lib/screens/finance/payments_ledger_screen.dart` | RpcClient | `paymentsLedgerProvider` | `payments` + `reconcile_payment_to_invoice()` | No | **PARTIALLY CONNECTED** | Ledger live. Unmatched reconciliation UI pending |
-| **15** | Admissions Pipeline | `lib/screens/operations/admissions_screen.dart` | RpcClient | `admissionsPipelineProvider` | `get_admissions_pipeline()` | No | **PARTIALLY CONNECTED** | RPC stub and provider exist; Kanban board UI pending |
-| **16** | Direct Messaging (Staff) | *(file to create)* | `MessagingRepository` | `parentMessagesControllerProvider` | `direct_messages` + Realtime | **Yes** | **PARTIALLY CONNECTED** | Repository fully implemented via Screen 09. Staff-facing view screen pending |
-| **17** | Notification Centre | `lib/screens/school_admin/notifications_screen.dart` | RpcClient | `notificationsProvider` | `notifications` + `mark_all_notifications_read()` | No | **PARTIALLY CONNECTED** | List and mark-read wired; push/FCM = EXTERNAL DEPENDENCY |
-| **18** | Fleet & Bus Tracking | `lib/screens/operations/bus_tracking_screen.dart` | SupabaseClient | `busTelemetryProvider` | `get_fleet_dashboard()` + `bus_telemetry` | **Yes** | **PARTIALLY CONNECTED** | Route list + live telemetry bound. GPS hardware = EXTERNAL DEPENDENCY |
-| **19** | School Marketplace | `lib/screens/operations/marketplace_screen.dart` | SupabaseClient | `marketplaceItemsProvider` | `marketplace_items` + `marketplace_orders` | No | **PARTIALLY CONNECTED** | Catalog live. Payment gateway = EXTERNAL DEPENDENCY |
-| **20** | Library Management | *(file to create)* | RpcClient | `libraryDashboardProvider` | `get_library_dashboard()` | No | **PARTIALLY CONNECTED** | RPC stub complete; screen implementation pending |
-| **21** | Behaviour & Pastoral Support | *(file to create)* | RpcClient | `behaviorDashboardProvider` | `get_behavior_dashboard()` | No | **PARTIALLY CONNECTED** | RPC stub complete; screen implementation pending |
-| **22** | Reports & Analytics | `lib/screens/school_admin/school_reports_screen.dart` | RpcClient | Inline in screen | `get_attendance_report()` + `get_academic_performance_report()` + `get_fee_collections_report()` | No | **CONNECTED** | All 3 report tabs wired to live RPCs. Filters: year, term, section. Table rendering live |
-| **23** | School Settings | *(file to create)* | SupabaseClient | `schoolSettingsProvider` | `schools` table (`settings` JSONB) | No | **PARTIALLY CONNECTED** | Model scaffolded; settings form UI pending |
-| **24** | Students Directory | *(file to create)* | RpcClient | `studentsDirectoryProvider` | `get_students_directory(academic_year_id)` | No | **PARTIALLY CONNECTED** | RPC stub complete; searchable directory UI pending |
-| **25** | Classes & Sections Overview | `lib/screens/school_admin/classes_sections_screen.dart` | SupabaseClient | `classSectionsProvider` | `class_sections` + `get_classes_sections_overview()` | No | **PARTIALLY CONNECTED** | CRUD UI wired. Live enrolled-count cards from RPC pending |
-| **26** | Gradebook Setup | `lib/screens/school_admin/gradebook_setup_screen.dart` | `TeacherRepository` | `teacherGradebookSetupProvider` | `get_gradebook_setup()` | No | **CONNECTED** | Category weights, assessment weights, validation wired to live RPC |
-| **27** | Report Cards Management | `lib/screens/school_admin/report_cards_screen.dart` | RpcClient | `reportCardsOverviewProvider` | `get_report_cards_overview()` + `set_report_card_status()` + `bulk_publish_report_cards()` | No | **PARTIALLY CONNECTED** | Overview table live. Approval workflow and bulk publish wired |
-| **28** | Announcements | `lib/screens/operations/announcements_screen.dart` | SupabaseClient | `announcementsProvider` | `announcements` table | No | **PARTIALLY CONNECTED** | List query wired. Realtime updates and role-audience filters pending |
-
----
-
-### Hardcoded Mock Audit — Phase 012 Remediation
-
-| Fixture | Location | Resolution |
-|---|---|---|
-| `Tariro Moyo` | `parent_shell.dart` | REMOVED — replaced by `user_relationships` query |
-| `Kuda Moyo` | `parent_shell.dart` | REMOVED — replaced by `user_relationships` query |
-| `94.6%` attendance | `parent_shell.dart` | REMOVED — replaced by `get_parent_dashboard()` RPC KPI |
-| `$320` fees | `parent_shell.dart` | REMOVED — replaced by `FinanceCurrencySummary.formattedOutstanding` |
-| `Classes Today = 5` | `teacher_shell.dart` | REMOVED — replaced by `TeacherDashboardMetrics.classesToday` from RPC |
-| `Attendance = 2` | `teacher_shell.dart` | REMOVED — replaced by `TeacherDashboardMetrics.attendancePending` from RPC |
-| `To Mark = 18` | `teacher_shell.dart` | REMOVED — replaced by `TeacherDashboardMetrics.submissionsToMark` from RPC |
-| `Messages = 4` | `teacher_shell.dart` | REMOVED — replaced by `TeacherDashboardMetrics.unreadMessages` from RPC |
-| Static schedule items | `teacher_shell.dart` | REMOVED — replaced by `TeacherDashboardMetrics.schedule` list from RPC |
-| `1420` students | `school_admin_shell.dart` | REMOVED — replaced by `total_students` from `get_school_admin_dashboard_metrics()` |
-| `96.2%` attendance | `school_admin_shell.dart` | REMOVED — replaced by `attendance_rate` from RPC |
-| `Mr E. Chiwara`, `Cambridge IGCSE` | `parent_academics_screen.dart` | REMOVED — replaced by `get_student_360_summary()` live data |
+| # | Screen | Current implementation | Status | Remaining verified gap |
+|---|---|---|---|---|
+| **00** | Design System & Tokens | `lib/core/theme.dart` + shared Stitch widgets | **CONNECTED** | None |
+| **01** | School Admin Command Center | Live admin metrics + real quick-action routes | **PARTIALLY CONNECTED** | Some secondary activity/staff presentation still uses compatibility/raw-map paths |
+| **02** | Student 360 Unified Record | Authoritative `get_student_360_summary()` exists and is consumed by student/parent flows | **PARTIALLY CONNECTED** | Dedicated frozen standalone Screen 02 view is still missing |
+| **03** | Teacher Dashboard | `TeacherRepository` + live dashboard RPC | **CONNECTED** | None material |
+| **04** | Teacher Attendance Roll Call | Verified roll-call RPC + correct `student_profile_id` mutation contract + offline queue fallback | **CONNECTED** | Broader offline engine improvements are platform-wide, not screen-specific |
+| **05** | Teacher Gradebook | Verified gradebook RPC + `teacher_remarks`/correct conflict key + server validation | **CONNECTED** | None material |
+| **06** | Parent Dashboard | Linked-child context + authoritative parent dashboard contract | **CONNECTED** | None material |
+| **07** | Parent Academics | Uses `get_parent_academics()` authoritative subject/assessment/report-card payload | **CONNECTED** | None material |
+| **08** | Parent Fees & Payments | Real multi-currency account data from `get_parent_fees()` | **PARTIALLY CONNECTED / EXTERNAL DEPENDENCY** | Real checkout/payment gateway + webhook not connected; UI no longer fakes confirmed payment |
+| **09** | Parent Messages | `MessagingRepository`, realtime, dedupe, retry-safe compose, mobile conversation switching | **CONNECTED** | Message attachments require a storage provider/bucket |
+| **10** | Super Admin Platform Overview | Authoritative platform metrics RPC | **PARTIALLY CONNECTED** | Final role acceptance and action coverage still pending |
+| **11** | Super Admin Schools Directory | Directory now reads authoritative schools-directory RPC; school status action is server-authoritative | **PARTIALLY CONNECTED** | Final subscription/action acceptance still pending |
+| **12** | Finance/Bursar Dashboard | Currency-aware backend `currency_totals[]` wired to KPI rendering | **PARTIALLY CONNECTED** | `expenses` table has no currency column, so expense analytics cannot yet be truly multi-currency |
+| **13** | Invoices Management | Dedicated routed screen + live invoice/currency fields + server batch generation | **CONNECTED** | None material |
+| **14** | Payments Ledger & Reconciliation | Dedicated routed ledger + nullable unmatched payments + server reconciliation RPC | **CONNECTED** | Incoming gateway/webhook ingestion is an external integration |
+| **15** | Admissions Pipeline | Dedicated routed pipeline + status transitions + accepted-student linking | **CONNECTED** | Unauthenticated applicant document upload needs a signed-upload flow if required |
+| **16** | Direct Messaging (Staff) | Dedicated screen/controller/repository + same-school contact discovery + realtime; DB write policy hardened | **CONNECTED** | Message attachments require storage provider/bucket |
+| **17** | Notification Centre | `get_notification_center()`, mark-read/all-read RPCs + profile-scoped realtime | **CONNECTED / EXTERNAL DEPENDENCY** | Push delivery requires FCM/APNs credentials/provider |
+| **18** | Fleet & Bus Tracking | Real routes/stops + realtime `bus_telemetry` + stale telemetry handling | **PARTIALLY CONNECTED / EXTERNAL DEPENDENCY** | GPS hardware/provider required; some Supabase/realtime lifecycle remains inside widget |
+| **19** | School Marketplace | Server-authoritative atomic order RPC + real catalog/orders + currency display | **PARTIALLY CONNECTED / EXTERNAL DEPENDENCY** | Item listing still uses legacy service path; marketplace images/payment provider not provisioned |
+| **20** | Library Management | Dedicated routed screen + dashboard RPC + issue/return/fine RPCs + role-gated actions | **CONNECTED** | None material |
+| **21** | Behaviour & Pastoral Support | Dedicated routed screen + behaviour dashboard + update/guardian workflows | **CONNECTED** | None material |
+| **22** | Reports & Analytics | Verified attendance, academic-performance and scoped fee-report RPCs | **PARTIALLY CONNECTED** | Screen still calls `RpcClient` directly instead of controller/repository layer |
+| **23** | School Settings | Dedicated routed form + `get_school_configuration()` / `patch_school_configuration()` allow-list | **CONNECTED** | Platform subscription fields intentionally read-only |
+| **24** | Students Directory | Dedicated searchable/filterable directory backed by `get_students_directory()` | **CONNECTED** | Mutations intentionally remain in Enrollment workflow |
+| **25** | Classes & Sections | Real classes/sections data and create actions | **PARTIALLY CONNECTED** | Create mutations still call legacy academic service directly from widget |
+| **26** | Gradebook Setup | `get_gradebook_setup()` drives weight matrix and validity | **PARTIALLY CONNECTED** | Term/category creation still has legacy direct-service paths |
+| **27** | Report Cards Management | Server-authoritative generate/status/bulk-publish lifecycle | **CONNECTED** | None material |
+| **28** | Announcements | Dedicated management screen + server draft/status RPCs + school-scoped realtime | **CONNECTED / EXTERNAL DEPENDENCY** | Attachment storage is intentionally disabled until a dedicated bucket/provider exists |
 
 ---
 
-### Implementation Progression Roadmap
+## Current Priority Register
 
-- DONE **Stage 1 (Foundation):** `RpcClient`, `ActiveSessionController`, `AppDatabase` (Drift), `SyncEngine`, heartbeat `touch_active_profile`.
-- DONE **Stage 2 (Teacher):** Screens 03, 04, 05, 26 — CONNECTED via `TeacherRepository` + `teacherDashboardControllerProvider`.
-- DONE **Stage 3 (Admin Core):** Screen 01, 22, 25, 26, 27 — CONNECTED or PARTIALLY CONNECTED.
-- DONE **Stage 4 (Parent):** Screens 06, 07, 08, 09 — CONNECTED via `ParentRepository` + `MessagingRepository`.
-- DONE **Stage 5 (Finance):** Screens 12, 13, 14 — PARTIALLY CONNECTED.
-- PENDING **Stage 6 (Operations):** Screens 15, 16, 17, 18, 19, 20, 21, 23 — RPCs stubbed; UI screens pending.
-- PENDING **Stage 7 (Super Admin):** Screens 10, 11 — PARTIALLY CONNECTED.
-- PENDING **Stage 8 (Final Parity & QA):** Implement remaining screens (02, 15–17, 20–24), integration tests, CI.
+### Architecture cleanup still required
+1. Screen 22: move report execution behind controller/repository.
+2. Screen 25: move class/section mutations behind repository/controller.
+3. Screen 26: move grading-term/category mutations behind repository/controller.
+4. Screen 18: move realtime/channel and route/stop mutation lifecycle out of widget.
+5. Screen 19: move item-listing mutation out of widget/legacy service.
+
+### External dependencies — do not fake completion
+- Parent payment checkout/provider webhook.
+- Push delivery via FCM/APNs.
+- GPS hardware/provider for fleet telemetry.
+- Message, marketplace and announcement attachment/image storage buckets/providers.
+- Optional unauthenticated admissions document signed-upload flow.
+
+### Platform-wide work after screen parity
+- Realtime lifecycle acceptance across profile/school/logout switches.
+- Offline-first verification and safe conflict handling.
+- Role-by-role acceptance testing for Super Admin, School Admin, Teacher, Student, Parent, Finance Manager and Registrar.
+- Expand automated tests beyond the minimal historical suite.
+- Final secret/mock scans and final parity review before merge.
+
+---
+
+## Guardrails
+
+- Do not invent RPC names, parameters, JSON keys, tables, roles, enums or Drift structures.
+- Do not combine money across currencies.
+- Do not queue payment reconciliation or report publication offline.
+- Do not claim external-provider features are complete until the provider is actually connected.
+- Do not redesign the frozen Screen 00–28 visual source of truth during backend/integration work.
+- Do not work directly on `main`.
