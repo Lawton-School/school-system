@@ -1,0 +1,158 @@
+name: Phase 4 wire Student Dashboard
+
+on:
+  push:
+    branches:
+      - chatgpt/phase3-contracts
+    paths:
+      - '.github/workflows/phase4_wire_student_dashboard.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/phase3-contracts
+
+      - name: Replace Student Dashboard mock data with verified contracts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('my_flutter_app/lib/screens/student/student_shell.dart')
+          s = p.read_text()
+
+          def replace_once(old, new, label):
+              global s
+              count = s.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, found {count}')
+              s = s.replace(old, new, 1)
+
+          replace_once(
+              "import 'package:go_router/go_router.dart';\nimport '../../models/models.dart';",
+              "import 'package:go_router/go_router.dart';\nimport '../../controllers/notification_controller.dart';\nimport '../../controllers/student_dashboard_controller.dart';\nimport '../../models/models.dart';",
+              'controller imports',
+          )
+
+          replace_once(
+              """    final session = ref.watch(activeSessionProvider);\n    final schoolId = session?.schoolId ?? '';\n\n    final coursesAsync = ref.watch(coursesProvider(schoolId));\n    final assignmentsAsync = ref.watch(assignmentsProvider((schoolId, null)));\n""",
+              """    final session = ref.watch(activeSessionProvider);\n    final studentProfileId = session?.profileId ?? '';\n    final summaryAsync = ref.watch(studentDashboardSummaryProvider(studentProfileId));\n    final notificationCenterAsync = ref.watch(notificationCenterProvider);\n\n    final summary = summaryAsync.valueOrNull ?? const <String, dynamic>{};\n    final student = summary['student'] is Map\n        ? Map<String, dynamic>.from(summary['student'] as Map)\n        : const <String, dynamic>{};\n    final attendance = summary['attendance'] is Map\n        ? Map<String, dynamic>.from(summary['attendance'] as Map)\n        : const <String, dynamic>{};\n    final academics = summary['academics'] is Map\n        ? Map<String, dynamic>.from(summary['academics'] as Map)\n        : const <String, dynamic>{};\n    final latestReport = academics['latest_report_card'] is Map\n        ? Map<String, dynamic>.from(academics['latest_report_card'] as Map)\n        : const <String, dynamic>{};\n\n    final studentName = [student['first_name'], student['last_name']]\n        .whereType<String>()\n        .where((part) => part.trim().isNotEmpty)\n        .join(' ');\n    final gpa = latestReport['gpa']?.toString();\n    final attendanceRate = attendance['attendance_rate'] as num?;\n    final unreadCount = (notificationCenterAsync.valueOrNull?['unread_count'] as num?)?.toInt() ?? 0;\n""",
+              'dashboard data setup',
+          )
+
+          replace_once(
+              """                                  _TopBar(\n                                    schoolName: session?.schoolName ?? 'Greenwood High School',\n                                    onProfileTap: () => _showProfileSheet(context),\n                                  ),\n                                  const SizedBox(height: 24),\n                                  const _WelcomeHeader(),\n                                  const SizedBox(height: 22),\n                                  _StatsGrid(\n                                    coursesCount: coursesAsync.valueOrNull?.length ?? 2,\n                                    pendingCount: assignmentsAsync.valueOrNull?.length ?? 1,\n                                    isTabletOrDesktop: !isMobile,\n                                  ),\n""",
+              """                                  _TopBar(\n                                    schoolName: session?.schoolName ?? 'School',\n                                    unreadCount: unreadCount,\n                                    onProfileTap: () => _showProfileSheet(context),\n                                  ),\n                                  const SizedBox(height: 24),\n                                  _WelcomeHeader(\n                                    studentName: studentName.isNotEmpty ? studentName : 'Student',\n                                  ),\n                                  const SizedBox(height: 22),\n                                  _StatsGrid(\n                                    gpa: gpa,\n                                    attendanceRate: attendanceRate,\n                                    coursesCount: null,\n                                    pendingCount: null,\n                                    isTabletOrDesktop: !isMobile,\n                                  ),\n""",
+              'top summary widgets',
+          )
+
+          course_old = 'courses: coursesAsync.valueOrNull ?? [],'
+          if s.count(course_old) != 2:
+              raise SystemExit(f'course list wiring: expected 2 matches, found {s.count(course_old)}')
+          s = s.replace(course_old, 'courses: const <CourseModel>[],')
+
+          assignment_old = 'assignments: assignmentsAsync.valueOrNull ?? [],'
+          if s.count(assignment_old) != 2:
+              raise SystemExit(f'assignment list wiring: expected 2 matches, found {s.count(assignment_old)}')
+          s = s.replace(assignment_old, 'assignments: const <AssignmentModel>[],')
+
+          replace_once(
+              """class _TopBar extends StatelessWidget {\n  final String schoolName;\n  final VoidCallback onProfileTap;\n\n  const _TopBar({\n    required this.schoolName,\n    required this.onProfileTap,\n  });\n""",
+              """class _TopBar extends StatelessWidget {\n  final String schoolName;\n  final int unreadCount;\n  final VoidCallback onProfileTap;\n\n  const _TopBar({\n    required this.schoolName,\n    required this.unreadCount,\n    required this.onProfileTap,\n  });\n""",
+              'top bar signature',
+          )
+
+          replace_once(
+              """        _NotificationButton(\n          onTap: () {\n            ScaffoldMessenger.of(context).showSnackBar(\n              const SnackBar(content: Text('You have 3 new notifications')),\n            );\n          },\n        ),\n""",
+              """        _NotificationButton(\n          count: unreadCount,\n          onTap: () {\n            ScaffoldMessenger.of(context).showSnackBar(\n              SnackBar(\n                content: Text(\n                  unreadCount == 0\n                      ? 'No unread notifications'\n                      : '$unreadCount unread notification${unreadCount == 1 ? '' : 's'}',\n                ),\n              ),\n            );\n          },\n        ),\n""",
+              'notification action',
+          )
+
+          replace_once(
+              """class _NotificationButton extends StatelessWidget {\n  const _NotificationButton({required this.onTap});\n\n  final VoidCallback onTap;\n""",
+              """class _NotificationButton extends StatelessWidget {\n  const _NotificationButton({required this.count, required this.onTap});\n\n  final int count;\n  final VoidCallback onTap;\n""",
+              'notification button signature',
+          )
+
+          badge_pattern = re.compile(
+              r"        Positioned\(\n          right: -2,\n          top: -3,\n          child: Container\(\n            width: 18,\n            height: 18,\n            alignment: Alignment\.center,\n            decoration: const BoxDecoration\(\n              color: Color\(0xFFFF4D67\),\n              shape: BoxShape\.circle,\n            \),\n            child: Text\(\n              '3',\n              style: GoogleFonts\.inter\(\n                color: Colors\.white,\n                fontSize: 10,\n                fontWeight: FontWeight\.w800,\n              \),\n            \),\n          \),\n        \),"
+          )
+          badge_new = """        if (count > 0)\n          Positioned(\n            right: -2,\n            top: -3,\n            child: Container(\n              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),\n              padding: const EdgeInsets.symmetric(horizontal: 4),\n              alignment: Alignment.center,\n              decoration: const BoxDecoration(\n                color: Color(0xFFFF4D67),\n                shape: BoxShape.circle,\n              ),\n              child: Text(\n                count > 99 ? '99+' : '$count',\n                style: GoogleFonts.inter(\n                  color: Colors.white,\n                  fontSize: 9,\n                  fontWeight: FontWeight.w800,\n                ),\n              ),\n            ),\n          ),"""
+          s, n = badge_pattern.subn(badge_new, s, count=1)
+          if n != 1:
+              raise SystemExit(f'notification badge: expected 1 match, found {n}')
+
+          replace_once(
+              """class _WelcomeHeader extends StatelessWidget {\n  const _WelcomeHeader();\n""",
+              """class _WelcomeHeader extends StatelessWidget {\n  final String studentName;\n\n  const _WelcomeHeader({required this.studentName});\n""",
+              'welcome signature',
+          )
+          replace_once("                    'Student Portal 👋',", "                    '$studentName 👋',", 'welcome student name')
+
+          stats_pattern = re.compile(
+              r"class _StatsGrid extends StatelessWidget \{.*?\n\}\n\nclass _StatData",
+              re.S,
+          )
+          stats_new = """class _StatsGrid extends StatelessWidget {\n  final String? gpa;\n  final num? attendanceRate;\n  final int? coursesCount;\n  final int? pendingCount;\n  final bool isTabletOrDesktop;\n\n  const _StatsGrid({\n    required this.gpa,\n    required this.attendanceRate,\n    required this.coursesCount,\n    required this.pendingCount,\n    this.isTabletOrDesktop = false,\n  });\n\n  @override\n  Widget build(BuildContext context) {\n    final stats = [\n      _StatData(\n        icon: Icons.star_rounded,\n        iconColor: StudentDashboardPage.orange,\n        value: gpa == null || gpa!.isEmpty ? '—' : gpa!,\n        label: 'GPA',\n      ),\n      _StatData(\n        icon: Icons.groups_2_rounded,\n        iconColor: StudentDashboardPage.green,\n        value: attendanceRate == null ? '—' : '$attendanceRate%',\n        label: 'Attendance',\n      ),\n      _StatData(\n        icon: Icons.menu_book_rounded,\n        iconColor: StudentDashboardPage.primary,\n        value: coursesCount?.toString() ?? '—',\n        label: 'Courses',\n      ),\n      _StatData(\n        icon: Icons.assignment_rounded,\n        iconColor: StudentDashboardPage.pink,\n        value: pendingCount?.toString() ?? '—',\n        label: 'Pending',\n      ),\n    ];\n\n    return Row(\n      children: List.generate(stats.length, (index) {\n        return Expanded(\n          child: Padding(\n            padding: EdgeInsets.only(\n              right: index == stats.length - 1\n                  ? 0\n                  : (isTabletOrDesktop ? 14 : 8),\n            ),\n            child: _StatCard(\n              data: stats[index],\n              isTabletOrDesktop: isTabletOrDesktop,\n            ),\n          ),\n        );\n      }),\n    );\n  }\n}\n\nclass _StatData"""
+          s, n = stats_pattern.subn(stats_new, s, count=1)
+          if n != 1:
+              raise SystemExit(f'stats grid: expected 1 match, found {n}')
+
+          replace_once(
+              """    final activeCourseName = courses.isNotEmpty ? courses.first.name : 'Biology';\n    final activeUnit = courses.isNotEmpty && courses.first.description != null\n        ? courses.first.description!\n        : 'Unit 4: Cell Structure and Function';\n""",
+              """    if (courses.isEmpty) {\n      return _WhiteSectionCard(\n        child: Column(\n          crossAxisAlignment: CrossAxisAlignment.start,\n          children: [\n            _SectionHeader(\n              icon: Icons.menu_book_rounded,\n              title: 'Continue Learning',\n              actionText: 'View All',\n              onTap: onViewAll,\n            ),\n            const SizedBox(height: 18),\n            Text(\n              'No assigned courses are available yet.',\n              style: GoogleFonts.inter(\n                color: StudentDashboardPage.muted,\n                fontSize: 13,\n                fontWeight: FontWeight.w500,\n              ),\n            ),\n          ],\n        ),\n      );\n    }\n\n    final activeCourseName = courses.first.name;\n    final activeUnit = courses.first.description?.trim().isNotEmpty == true\n        ? courses.first.description!\n        : 'Course details unavailable';\n""",
+              'course empty state',
+          )
+
+          replace_once('              value: .60,', '              value: 0,', 'course progress value')
+          replace_once("          '60%',", "          '—',", 'course progress label')
+
+          schedule_pattern = re.compile(
+              r"class _ScheduleCard extends StatelessWidget \{.*?\n\}\n\n// ─────────────────────────────────────────────────────────────────\n// UPCOMING ASSIGNMENTS CARD",
+              re.S,
+          )
+          schedule_new = """class _ScheduleCard extends StatelessWidget {\n  final VoidCallback onViewCalendar;\n\n  const _ScheduleCard({required this.onViewCalendar});\n\n  @override\n  Widget build(BuildContext context) {\n    return _WhiteSectionCard(\n      child: Column(\n        crossAxisAlignment: CrossAxisAlignment.start,\n        children: [\n          _SectionHeader(\n            icon: Icons.calendar_month_rounded,\n            title: \"Today's Schedule\",\n            actionText: 'View Calendar',\n            onTap: onViewCalendar,\n          ),\n          const SizedBox(height: 14),\n          Text(\n            'No student-specific timetable is connected yet.',\n            style: GoogleFonts.inter(\n              color: StudentDashboardPage.muted,\n              fontSize: 13,\n              fontWeight: FontWeight.w500,\n            ),\n          ),\n        ],\n      ),\n    );\n  }\n}\n\n// ─────────────────────────────────────────────────────────────────\n// UPCOMING ASSIGNMENTS CARD"""
+          s, n = schedule_pattern.subn(schedule_new, s, count=1)
+          if n != 1:
+              raise SystemExit(f'schedule card: expected 1 match, found {n}')
+
+          assignments_pattern = re.compile(
+              r"class _AssignmentsCard extends StatelessWidget \{.*?\n\}\n\n// ─────────────────────────────────────────────────────────────────\n// QUICK ACTIONS CARD",
+              re.S,
+          )
+          assignments_new = """class _AssignmentsCard extends StatelessWidget {\n  final List<AssignmentModel> assignments;\n  final VoidCallback onViewAll;\n\n  const _AssignmentsCard({\n    required this.assignments,\n    required this.onViewAll,\n  });\n\n  @override\n  Widget build(BuildContext context) {\n    return _WhiteSectionCard(\n      child: Column(\n        crossAxisAlignment: CrossAxisAlignment.start,\n        children: [\n          _SectionHeader(\n            icon: Icons.assignment_rounded,\n            title: 'Upcoming Assignments',\n            actionText: 'View All',\n            onTap: onViewAll,\n          ),\n          const SizedBox(height: 14),\n          if (assignments.isEmpty)\n            Text(\n              'No student-scoped assignments are available yet.',\n              style: GoogleFonts.inter(\n                color: StudentDashboardPage.muted,\n                fontSize: 13,\n                fontWeight: FontWeight.w500,\n              ),\n            )\n          else\n            ...assignments.take(3).map((assignment) {\n              final due = assignment.dueDate;\n              final overdue = due.isBefore(DateTime.now());\n              return Padding(\n                padding: const EdgeInsets.only(bottom: 8),\n                child: _AssignmentRow(\n                  icon: Icons.description_rounded,\n                  iconColor: StudentDashboardPage.primary,\n                  iconBg: const Color(0xFFEDEAFF),\n                  title: assignment.title,\n                  subject: assignment.lesson?.title ?? 'Assignment',\n                  due: 'Due ${due.day}/${due.month}/${due.year}',\n                  status: overdue ? 'Past Due' : 'Upcoming',\n                  statusBg: overdue\n                      ? const Color(0xFFFFE5EA)\n                      : const Color(0xFFE6F7EF),\n                  statusColor: overdue\n                      ? const Color(0xFFE84461)\n                      : const Color(0xFF138A5E),\n                  onTap: onViewAll,\n                ),\n              );\n            }),\n        ],\n      ),\n    );\n  }\n}\n\n// ─────────────────────────────────────────────────────────────────\n// QUICK ACTIONS CARD"""
+          s, n = assignments_pattern.subn(assignments_new, s, count=1)
+          if n != 1:
+              raise SystemExit(f'assignments card: expected 1 match, found {n}')
+
+          # Profile sheet: use already-fetched authoritative Student 360 name when available.
+          replace_once(
+              """    final session = ref.read(activeSessionProvider);\n    showModalBottomSheet(\n""",
+              """    final session = ref.read(activeSessionProvider);\n    final summary = ref\n            .read(studentDashboardSummaryProvider(session?.profileId ?? ''))\n            .valueOrNull ??\n        const <String, dynamic>{};\n    final student = summary['student'] is Map\n        ? Map<String, dynamic>.from(summary['student'] as Map)\n        : const <String, dynamic>{};\n    final profileName = [student['first_name'], student['last_name']]\n        .whereType<String>()\n        .where((part) => part.trim().isNotEmpty)\n        .join(' ');\n    showModalBottomSheet(\n""",
+              'profile summary lookup',
+          )
+          replace_once(
+              "                        session?.schoolName ?? 'Student Profile',",
+              "                        profileName.isNotEmpty ? profileName : 'Student Profile',",
+              'profile name display',
+          )
+
+          p.write_text(s)
+          PY
+
+      - name: Format changed Dart file
+        run: dart format my_flutter_app/lib/screens/student/student_shell.dart
+
+      - name: Commit Student Dashboard wiring
+        run: |
+          git config user.name "ZivoConnect CI"
+          git config user.email "actions@users.noreply.github.com"
+          git add my_flutter_app/lib/screens/student/student_shell.dart
+          git commit -m "Wire Student Dashboard to authoritative summary data"
+          git push origin HEAD:chatgpt/phase3-contracts
