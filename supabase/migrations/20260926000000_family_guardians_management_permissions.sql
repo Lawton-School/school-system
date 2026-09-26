@@ -1,3 +1,36 @@
+-- Reconcile guardian relationship structures that already exist in production.
+ALTER TABLE public.user_relationships
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active',
+  ADD COLUMN IF NOT EXISTS is_primary_guardian boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS is_legal_guardian boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS lives_with_student boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS valid_from date,
+  ADD COLUMN IF NOT EXISTS valid_until date;
+
+CREATE TABLE IF NOT EXISTS public.student_guardian_permissions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  school_id uuid NOT NULL REFERENCES public.schools(id) ON DELETE CASCADE,
+  relationship_id uuid NOT NULL REFERENCES public.user_relationships(id) ON DELETE CASCADE,
+  can_view_academics boolean NOT NULL DEFAULT true,
+  can_view_attendance boolean NOT NULL DEFAULT true,
+  can_view_behaviour boolean NOT NULL DEFAULT true,
+  can_view_documents boolean NOT NULL DEFAULT true,
+  can_message_teachers boolean NOT NULL DEFAULT true,
+  receives_school_messages boolean NOT NULL DEFAULT true,
+  receives_attendance_alerts boolean NOT NULL DEFAULT true,
+  is_financially_responsible boolean NOT NULL DEFAULT false,
+  receives_invoices boolean NOT NULL DEFAULT false,
+  can_make_payments boolean NOT NULL DEFAULT false,
+  is_emergency_contact boolean NOT NULL DEFAULT false,
+  is_pickup_authorized boolean NOT NULL DEFAULT false,
+  portal_access boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_student_guardian_permissions_relationship
+ON public.student_guardian_permissions(relationship_id) WHERE deleted_at IS NULL;
+
 -- Family & Guardians management + module-level parent permission enforcement.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_user_relationships_one_primary_guardian
 ON public.user_relationships(student_id)
