@@ -211,7 +211,7 @@ class _StudentsDirectoryScreenState
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, index) => _StudentDirectoryCard(
                           student: visible[index],
-                          onTap: () => _showDetails(context, visible[index]),
+                          onTap: () => _showDetails(context, ref, visible[index]),
                         ),
                       ),
                     );
@@ -254,7 +254,7 @@ class _StudentsDirectoryScreenState
     }).toList(growable: false);
   }
 
-  void _showDetails(BuildContext context, Map<String, dynamic> student) {
+  void _showDetails(BuildContext context, WidgetRef ref, Map<String, dynamic> student) {
     final attendance = (student['attendance_rate'] as num?)?.toDouble();
     final balance = (student['fee_balance'] as num?)?.toDouble() ?? 0;
     final currency = student['currency']?.toString() ?? '';
@@ -294,11 +294,140 @@ class _StudentsDirectoryScreenState
           ),
         ),
         actions: [
+          if ((student['student_profile_id'] ?? student['profile_id'] ?? student['id']) != null)
+            FilledButton.icon(
+              onPressed: () {
+                final studentId = (student['student_profile_id'] ?? student['profile_id'] ?? student['id']).toString();
+                Navigator.pop(dialogContext);
+                _showFamilyGuardians(context, ref, studentId, student['student_name']?.toString() ?? 'Student');
+              },
+              icon: const Icon(Icons.family_restroom_rounded),
+              label: const Text('Family & Guardians'),
+            ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Close'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showFamilyGuardians(
+    BuildContext context,
+    WidgetRef ref,
+    String studentId,
+    String studentName,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      builder: (sheetContext) => FractionallySizedBox(
+        heightFactor: 0.88,
+        child: Consumer(
+          builder: (context, ref, _) {
+            final guardiansAsync = ref.watch(studentGuardiansProvider(studentId));
+            return Scaffold(
+              backgroundColor: AppTheme.stitchBg,
+              appBar: AppBar(
+                title: Text('$studentName · Family & Guardians'),
+                backgroundColor: Colors.white,
+              ),
+              body: guardiansAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => _ErrorState(
+                  message: 'Unable to load guardians: $error',
+                  onRetry: () => ref.invalidate(studentGuardiansProvider(studentId)),
+                ),
+                data: (guardians) {
+                  if (guardians.isEmpty) {
+                    return const _EmptyState(message: 'No guardians are linked to this student yet.');
+                  }
+                  return ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: guardians.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final guardian = guardians[index];
+                      final permissions = Map<String, dynamic>.from(
+                        guardian['permissions'] is Map ? guardian['permissions'] as Map : const {},
+                      );
+                      final isPrimary = guardian['is_primary_guardian'] == true;
+                      return StitchCard(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                CircleAvatar(
+                                  backgroundColor: AppTheme.primarySoft,
+                                  child: Text(
+                                    (guardian['parent_name']?.toString().trim().isNotEmpty ?? false)
+                                        ? guardian['parent_name'].toString().trim()[0].toUpperCase()
+                                        : 'G',
+                                    style: const TextStyle(color: AppTheme.primaryDark, fontWeight: FontWeight.w800),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        guardian['parent_name']?.toString() ?? 'Guardian',
+                                        style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.stitchHeading),
+                                      ),
+                                      Text(
+                                        guardian['relationship_type']?.toString().replaceAll('_', ' ') ?? 'guardian',
+                                        style: const TextStyle(color: AppTheme.stitchMuted, fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (isPrimary)
+                                  const StitchChip(label: 'Primary Guardian', variant: StitchChipVariant.success)
+                                else
+                                  OutlinedButton(
+                                    onPressed: () async {
+                                      await ref.read(rpcClientProvider).setPrimaryGuardian(
+                                        guardian['relationship_id'].toString(),
+                                      );
+                                      ref.invalidate(studentGuardiansProvider(studentId));
+                                    },
+                                    child: const Text('Make Primary'),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                for (final entry in permissions.entries)
+                                  FilterChip(
+                                    label: Text(entry.key.replaceAll('_', ' ')),
+                                    selected: entry.value == true,
+                                    onSelected: (enabled) async {
+                                      await ref.read(rpcClientProvider).updateGuardianPermissions(
+                                        relationshipId: guardian['relationship_id'].toString(),
+                                        permissions: {entry.key: enabled},
+                                      );
+                                      ref.invalidate(studentGuardiansProvider(studentId));
+                                    },
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            );
+          },
+        ),
       ),
     );
   }
