@@ -177,6 +177,31 @@ class RpcClient {
     return (res as num?)?.toInt() ?? 0;
   }
 
+  Future<List<Map<String, dynamic>>> getStudentGuardians(
+    String studentProfileId,
+  ) async {
+    final response = await _client.rpc('get_student_guardians', params: {
+      'p_student_profile_id': studentProfileId,
+    });
+    return _mapList(response);
+  }
+
+  Future<void> setPrimaryGuardian(String relationshipId) async {
+    await _client.rpc('set_primary_guardian', params: {
+      'p_relationship_id': relationshipId,
+    });
+  }
+
+  Future<Map<String, dynamic>> updateGuardianPermissions({
+    required String relationshipId,
+    required Map<String, bool> permissions,
+  }) async {
+    return _asMap(await _client.rpc('update_guardian_permissions', params: {
+      'p_relationship_id': relationshipId,
+      'p_permissions': permissions,
+    }));
+  }
+
   Future<Map<String, dynamic>> getParentDashboard(
     String studentProfileId,
   ) async {

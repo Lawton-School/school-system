@@ -2379,30 +2379,57 @@ class FinanceCurrencySummary {
 }
 
 class AuthorizedChild {
+  final String relationshipId;
   final String studentId;
   final String fullName;
   final String className;
   final String? campus;
   final String relationshipType;
+  final bool isPrimaryGuardian;
+  final bool isLegalGuardian;
+  final Map<String, bool> permissions;
 
   const AuthorizedChild({
+    this.relationshipId = '',
     required this.studentId,
     required this.fullName,
     required this.className,
     this.campus,
     this.relationshipType = 'guardian',
+    this.isPrimaryGuardian = false,
+    this.isLegalGuardian = false,
+    this.permissions = const <String, bool>{},
   });
 
   factory AuthorizedChild.fromRelationshipMap(Map<String, dynamic> map) {
-    final student = map['student'] as Map<String, dynamic>? ?? {};
+    final studentRaw = map['student'];
+    final student = studentRaw is Map
+        ? Map<String, dynamic>.from(studentRaw)
+        : const <String, dynamic>{};
+    final permissionRaw = map['permissions'];
+    final permissionMap = permissionRaw is Map
+        ? Map<String, dynamic>.from(permissionRaw)
+        : const <String, dynamic>{};
+
+    final name = map['student_name']?.toString().trim();
     return AuthorizedChild(
-      studentId: map['student_id'] as String? ?? student['id'] as String? ?? '',
-      fullName: student['full_name'] as String? ?? 'Student',
-      className: student['class_name'] as String? ?? 'Enrolled Class',
-      campus: student['campus_name'] as String?,
-      relationshipType: map['relationship_type'] as String? ?? 'guardian',
+      relationshipId: map['relationship_id']?.toString() ?? map['id']?.toString() ?? '',
+      studentId: map['student_id']?.toString() ?? student['id']?.toString() ?? '',
+      fullName: (name != null && name.isNotEmpty)
+          ? name
+          : student['full_name']?.toString() ?? 'Student',
+      className: map['class_name']?.toString() ?? student['class_name']?.toString() ?? 'Enrolled Class',
+      campus: map['campus_name']?.toString() ?? student['campus_name']?.toString(),
+      relationshipType: map['relationship_type']?.toString() ?? 'guardian',
+      isPrimaryGuardian: map['is_primary_guardian'] == true,
+      isLegalGuardian: map['is_legal_guardian'] == true,
+      permissions: permissionMap.map(
+        (key, value) => MapEntry(key, value == true),
+      ),
     );
   }
+
+  bool canAccess(String module) => permissions[module] ?? false;
 }
 
 class TeacherScheduleItem {

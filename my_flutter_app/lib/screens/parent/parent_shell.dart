@@ -324,7 +324,7 @@ class ParentDashboardPage extends ConsumerWidget {
                           const SizedBox(height: 18),
                           _buildAnnouncementCard(data?.announcements ?? []),
                           const SizedBox(height: 18),
-                          _buildQuickModuleGrid(context),
+                          _buildQuickModuleGrid(context, activeChild),
                         ],
                       ),
                     ),
@@ -339,7 +339,7 @@ class ParentDashboardPage extends ConsumerWidget {
                     const SizedBox(height: 16),
                     _buildAnnouncementCard(data?.announcements ?? []),
                     const SizedBox(height: 16),
-                    _buildQuickModuleGrid(context),
+                    _buildQuickModuleGrid(context, activeChild),
                   ],
                 ),
             ],
@@ -580,20 +580,23 @@ class ParentDashboardPage extends ConsumerWidget {
   }
 
   // ── QUICK MODULE ACCESS ───────────────────────────────────────
-  Widget _buildQuickModuleGrid(BuildContext context) {
-    final modules = [
+  Widget _buildQuickModuleGrid(BuildContext context, AuthorizedChild activeChild) {
+    final modules = <_ModuleLink>[
+      if (activeChild.canAccess('academics'))
       _ModuleLink(
         icon: Icons.bar_chart_rounded,
         label: 'Academics & Reports',
         color: AppTheme.primary,
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ParentAcademicsScreen())),
       ),
+      if (activeChild.canAccess('invoices') || activeChild.canAccess('payments'))
       _ModuleLink(
         icon: Icons.receipt_long_rounded,
         label: 'Fees & Payments',
         color: const Color(0xFFF59E0B),
         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ParentFeesScreen())),
       ),
+      if (activeChild.canAccess('school_messages') || activeChild.canAccess('message_teachers'))
       _ModuleLink(
         icon: Icons.forum_rounded,
         label: 'School Messages',
