@@ -22,8 +22,6 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
   Map<String, dynamic>? _selectedContact;
   List<DirectMessageItem> _messages = [];
   List<Map<String, dynamic>> _teacherContacts = [];
-  List<Map<String, dynamic>> _concerns = [];
-  List<Map<String, dynamic>> _meetings = [];
   bool _loadingThread = false;
   bool _sendingMessage = false;
 
@@ -38,30 +36,7 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
 
   Future<void> _loadTeachers() async {
     final contacts = await ref.read(messagingRepositoryProvider).fetchTeacherParentContacts();
-    final concerns = await ref.read(messagingRepositoryProvider).fetchStudentConcerns();
-    final meetings = await ref.read(messagingRepositoryProvider).fetchParentTeacherMeetings();
-    if (mounted) setState(() { _teacherContacts = contacts; _concerns = concerns; _meetings = meetings; });
-  }
-
-  Future<void> _rescheduleMeeting(Map<String,dynamic> meeting) async {
-    final d=await showDatePicker(context:context,firstDate:DateTime.now(),lastDate:DateTime.now().add(const Duration(days:365)),initialDate:DateTime.now().add(const Duration(days:1)));if(d==null)return;
-    final t=await showTimePicker(context:context,initialTime:TimeOfDay.now());if(t==null)return;
-    final when=DateTime(d.year,d.month,d.day,t.hour,t.minute);
-    final ok=await ref.read(messagingRepositoryProvider).respondParentTeacherMeeting(meetingId:meeting['id'].toString(),status:'reschedule_requested',scheduledAt:when);
-    if(ok)await _loadTeachers();
-    if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(ok?'New meeting time proposed.':'Could not reschedule meeting.')));
-  }
-
-  Future<void> _respondMeeting(Map<String,dynamic> meeting,String status) async {
-    final ok=await ref.read(messagingRepositoryProvider).respondParentTeacherMeeting(meetingId:meeting['id'].toString(),status:status);
-    if(ok)await _loadTeachers();
-    if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(ok?'Meeting updated.':'Meeting could not be updated.')));
-  }
-
-  Future<void> _acknowledge(Map<String,dynamic> concern) async {
-    final ok=await ref.read(messagingRepositoryProvider).acknowledgeStudentConcern(concern['id'].toString());
-    if(ok) await _loadTeachers();
-    if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(ok?'Feedback acknowledged.':'Could not acknowledge feedback.')));
+    if (mounted) setState(() => _teacherContacts = contacts);
   }
 
   void _initRealtime() {
@@ -218,11 +193,11 @@ class _ParentMessagesScreenState extends ConsumerState<ParentMessagesScreen> {
             'student_name': x['student_name'],
             'subject_id': x['subject_id'],
             'subject_name': x['subject_name'],
-            'last_message': x['subject_name'] ?? 'Teacher for '+(x['student_name']?.toString() ?? 'your child'),
+            'last_message': x['subject_name'] ?? 'Teacher for ${x['student_name']?.toString() ?? 'your child'}',
           }).where((x) => x['profile_id'] != null).toList();
           final byKey = <String, Map<String, dynamic>>{};
           for (final x in [...teacherContacts, ...messageContacts]) {
-            final key = x['profile_id'].toString()+'|'+(x['student_id']?.toString() ?? '')+'|'+(x['subject_id']?.toString() ?? '');
+            final key = ${x['profile_id']}|${x['student_id'] ?? ''}|${x['subject_id'] ?? ''};
             byKey[key] = x;
           }
           final contacts = byKey.values.toList();
