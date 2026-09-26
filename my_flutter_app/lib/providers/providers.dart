@@ -179,6 +179,12 @@ final parentRelationshipsProvider = FutureProvider.family<List<UserRelationshipM
   return AcademicStructureService(client).getParentStudentRelationships(schoolId);
 });
 
+final studentGuardiansProvider =
+    FutureProvider.family<List<Map<String, dynamic>>, String>((ref, studentProfileId) async {
+  final rpc = ref.watch(rpcClientProvider);
+  return rpc.getStudentGuardians(studentProfileId);
+});
+
 final attendanceEntriesProvider = FutureProvider.family<List<AttendanceEntryModel>, String>((ref, schoolId) async {
   final client = ref.watch(supabaseClientProvider);
   return SchoolOperationsService(client).getAttendanceEntries(schoolId);
