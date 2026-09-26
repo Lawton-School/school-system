@@ -24,31 +24,17 @@ class ParentRepository {
     }
 
     try {
-      final response = await _client
-          .from('user_relationships')
-          .select(
-            'id, relationship_type, student_id, '
-            'student:profiles!user_relationships_student_id_fkey('
-            'id, first_name, last_name, role, avatar_url, school_id)',
-          )
-          .eq('parent_id', parentProfileId)
-          .isFilter('deleted_at', null);
-
-      final list = (response as List<dynamic>?) ?? [];
-      return list.map((raw) {
-        final map = Map<String, dynamic>.from(raw as Map);
-        final studentRaw = map['student'];
-        if (studentRaw is Map) {
-          final student = Map<String, dynamic>.from(studentRaw);
-          final firstName = student['first_name']?.toString().trim() ?? '';
-          final lastName = student['last_name']?.toString().trim() ?? '';
-          student['full_name'] = '$firstName $lastName'.trim();
-          map['student'] = student;
-        }
-        return AuthorizedChild.fromRelationshipMap(map);
-      }).toList(growable: false);
+      final response = await _client.rpc('get_my_children');
+      final list = (response as List<dynamic>?) ?? const [];
+      return list
+          .whereType<Map>()
+          .map((raw) => AuthorizedChild.fromRelationshipMap(
+                Map<String, dynamic>.from(raw),
+              ))
+          .where((child) => child.studentId.isNotEmpty && child.canAccess('portal'))
+          .toList(growable: false);
     } catch (e) {
-      debugPrint('[ParentRepository] fetchAuthorizedChildren error: $e');
+      debugPrint('[ParentRepository] get_my_children error: $e');
       return [];
     }
   }
